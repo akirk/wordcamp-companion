@@ -1,6 +1,6 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.11';
-    const SUBSTANTIAL_OVERLAP_SECONDS = 15 * 60;
+    const SCRIPT_BUILD = '20260528.13';
+    const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -739,13 +739,11 @@
 
     function renderTrackSession(session, savedIds, isSpanning) {
         const isSaved = savedIds.has(session.id);
-        const conflicts = isSaved ? [] : getConflictsForSession(session, savedIds);
         const card = element('article', {
             className: [
                 'wcc-track-session',
                 isSpanning ? 'is-spanning' : '',
                 isSaved ? 'is-saved' : '',
-                conflicts.length ? 'has-conflict' : '',
                 session.type === 'custom' ? 'is-custom' : '',
             ].filter(Boolean).join(' '),
         });
@@ -753,7 +751,7 @@
         const button = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
-            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Save option' : 'Save')),
+            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : 'Save'),
         });
 
         if (session.url) {
@@ -775,15 +773,6 @@
 
         if (session.category_names && session.category_names.length) {
             card.append(element('div', { className: 'wcc-session-meta', text: session.category_names.join(', ') }));
-        }
-
-        if (conflicts.length) {
-            card.append(element('div', {
-                className: 'wcc-conflict',
-                text: 'Same time as ' + conflicts.map(function (conflict) {
-                    return conflict.title;
-                }).join(', '),
-            }));
         }
 
         button.disabled = state.savingSessionId !== null;
@@ -968,6 +957,10 @@
 
         if (step.detail) {
             body.append(element('p', { className: 'wcc-companion-detail', text: step.detail }));
+        }
+
+        if (step.warning) {
+            body.append(element('div', { className: 'wcc-companion-warning', text: step.warning }));
         }
 
         if (step.mapLinks && step.mapLinks.length) {
@@ -1410,6 +1403,9 @@
 
                 const session = block.session;
                 const track = getPrimaryTrack(session);
+                const overlapWarning = getSessionOverlapWarning(session, daySessions, timeZone);
+                let warningShownOnTrack = false;
+
                 if (track && track !== currentTrack) {
                     steps.push({
                         type: 'track',
@@ -1419,9 +1415,12 @@
                         title: currentTrack ? 'Switch to ' + track : 'Go to ' + track,
                         detail: '',
                         meta: '',
+                        warning: overlapWarning,
                     });
+                    warningShownOnTrack = Boolean(overlapWarning);
                     currentTrack = track;
                 }
+
                 steps.push({
                     type: 'session',
                     dayKey: group.key,
@@ -1431,6 +1430,7 @@
                     detail: getPrimaryTrack(session),
                     meta: formatSessionTime(session, timeZone),
                     session: session,
+                    warning: warningShownOnTrack ? '' : overlapWarning,
                 });
             });
 
@@ -1557,6 +1557,49 @@
         }
 
         return 'Pick one: ' + tracks.join(' / ');
+    }
+
+    function getSessionOverlapWarning(session, sessions, timeZone) {
+        if (!session || session.type === 'custom' || !session.start || !session.end) {
+            return '';
+        }
+
+        const sessionTrack = getPrimaryTrack(session);
+        const overlaps = (sessions || []).filter(function (candidate) {
+            const candidateTrack = getPrimaryTrack(candidate);
+
+            return candidate.id !== session.id &&
+                candidate.type !== 'custom' &&
+                candidate.start &&
+                candidate.end &&
+                sessionTrack &&
+                candidateTrack &&
+                candidateTrack !== sessionTrack &&
+                candidate.start <= session.start &&
+                candidate.end > session.start &&
+                sessionsOverlap(session, candidate) &&
+                !sessionsSubstantiallyOverlap(session, candidate);
+        }).sort(compareSessions);
+
+        if (!overlaps.length) {
+            return '';
+        }
+
+        const latestEnd = overlaps.reduce(function (latest, candidate) {
+            return Math.max(latest, candidate.end || candidate.start || 0);
+        }, 0);
+        const longestOverlap = overlaps.reduce(function (longest, candidate) {
+            return Math.max(longest, sessionsOverlapSeconds(session, candidate));
+        }, 0);
+        const names = overlaps.slice(0, 2).map(function (candidate) {
+            return candidate.title || 'another saved session';
+        });
+
+        if (overlaps.length > 2) {
+            names.push((overlaps.length - 2) + ' more');
+        }
+
+        return 'Heads up: ' + names.join(', ') + ' ' + (overlaps.length === 1 ? 'runs' : 'run') + ' until ' + formatSlotTime(latestEnd, timeZone) + ', so there is a ' + formatDuration(longestOverlap) + ' overlap.';
     }
 
     function renderSession(session, savedIds) {
