@@ -7,6 +7,7 @@ use WP_REST_Request;
 
 class RestController {
     private const NAMESPACE = 'wordcamp-companion/v1';
+    private const SUBSTANTIAL_OVERLAP_SECONDS = 15 * MINUTE_IN_SECONDS;
 
     private WordCampApi $api;
     private PlannerRepository $repository;
@@ -446,18 +447,39 @@ class RestController {
             $end = ! empty( $session['end'] ) ? (int) $session['end'] : $start;
             $last_index = count( $blocks ) - 1;
 
-            if ( $last_index >= 0 && $start < $blocks[ $last_index ]['end'] ) {
+            if ( $last_index >= 0 && $this->substantially_overlaps_block( $start, $end, $blocks[ $last_index ] ) ) {
                 $blocks[ $last_index ]['end'] = max( $blocks[ $last_index ]['end'], $end );
+                $blocks[ $last_index ]['sessions'][] = [
+                    'start' => $start,
+                    'end'   => $end,
+                ];
                 continue;
             }
 
             $blocks[] = [
-                'start' => $start,
-                'end'   => $end,
+                'start'    => $start,
+                'end'      => $end,
+                'sessions' => [
+                    [
+                        'start' => $start,
+                        'end'   => $end,
+                    ],
+                ],
             ];
         }
 
         return $blocks;
+    }
+
+    private function substantially_overlaps_block( int $start, int $end, array $block ): bool {
+        foreach ( $block['sessions'] ?? [] as $session ) {
+            $overlap = max( 0, min( $end, (int) $session['end'] ) - max( $start, (int) $session['start'] ) );
+            if ( $overlap >= self::SUBSTANTIAL_OVERLAP_SECONDS ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function append_compact_gap( array &$gaps, string $day_key, int $gap_start, int $gap_end, array $day_sessions, array $saved_lookup ): void {

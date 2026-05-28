@@ -1,5 +1,6 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.10';
+    const SCRIPT_BUILD = '20260528.11';
+    const SUBSTANTIAL_OVERLAP_SECONDS = 15 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -1295,7 +1296,7 @@
         const plannedSessions = allSessions.filter(function (session) {
             return savedIds.has(session.id) || session.auto;
         }).filter(function (session) {
-            return session.type !== 'custom' || !sessionOverlapsAny(session, savedRealSessions);
+            return session.type !== 'custom' || !sessionOverlapsAny(session, savedRealSessions, true);
         });
         const sourceSessions = savedSessions.length ? plannedSessions : allSessions;
         const event = getSelectedEvent();
@@ -1507,7 +1508,7 @@
             const sessionEnd = session.end || session.start;
             const lastBlock = realBlocks[realBlocks.length - 1];
 
-            if (lastBlock && session.start < lastBlock.end) {
+            if (lastBlock && sessionHasSubstantialOverlapWithBlock(session, lastBlock)) {
                 lastBlock.sessions.push(session);
                 lastBlock.end = Math.max(lastBlock.end, sessionEnd);
                 return;
@@ -2279,7 +2280,7 @@
             const sessionEnd = session.end || session.start;
             const lastBlock = blocks[blocks.length - 1];
 
-            if (lastBlock && session.start < lastBlock.end) {
+            if (lastBlock && sessionHasSubstantialOverlapWithBlock(session, lastBlock)) {
                 lastBlock.end = Math.max(lastBlock.end, sessionEnd);
                 lastBlock.sessions.push(session);
                 return;
@@ -2351,9 +2352,36 @@
         return Boolean(firstStart && firstEnd && secondStart && secondEnd && firstStart < secondEnd && secondStart < firstEnd);
     }
 
-    function sessionOverlapsAny(session, sessions) {
+    function sessionsOverlapSeconds(first, second) {
+        if (!sessionsOverlap(first, second)) {
+            return 0;
+        }
+
+        const firstStart = Number(first && first.start || 0);
+        const firstEnd = Number(first && (first.end || first.start) || 0);
+        const secondStart = Number(second && second.start || 0);
+        const secondEnd = Number(second && (second.end || second.start) || 0);
+
+        return Math.max(0, Math.min(firstEnd, secondEnd) - Math.max(firstStart, secondStart));
+    }
+
+    function sessionsSubstantiallyOverlap(first, second) {
+        return sessionsOverlapSeconds(first, second) >= SUBSTANTIAL_OVERLAP_SECONDS;
+    }
+
+    function sessionHasSubstantialOverlapWithBlock(session, block) {
+        return (block.sessions || []).some(function (candidate) {
+            return sessionsSubstantiallyOverlap(session, candidate);
+        });
+    }
+
+    function sessionOverlapsAny(session, sessions, substantialOnly) {
         return (sessions || []).some(function (candidate) {
-            return candidate.id !== session.id && sessionsOverlap(session, candidate);
+            if (candidate.id === session.id) {
+                return false;
+            }
+
+            return substantialOnly ? sessionsSubstantiallyOverlap(session, candidate) : sessionsOverlap(session, candidate);
         });
     }
 
