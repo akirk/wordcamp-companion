@@ -91,6 +91,14 @@
                 <div id="wcc-schedule" class="wcc-schedule"></div>
             </section>
         </section>
+
+        <footer class="wcc-build">
+            <?php
+            $asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : 'unknown';
+            ?>
+            <?php echo esc_html__( 'Build', 'wordcamp-companion' ); ?> <?php echo esc_html( $asset_version ); ?> -
+            <span id="wcc-js-build"><?php echo esc_html__( 'JS not loaded', 'wordcamp-companion' ); ?></span>
+        </footer>
     </main>
 
     <?php wp_app_body_close(); ?>

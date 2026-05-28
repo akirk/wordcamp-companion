@@ -56,6 +56,11 @@
         nodes.status = document.getElementById('wcc-status');
         nodes.schedule = document.getElementById('wcc-schedule');
         nodes.tabs = Array.from(document.querySelectorAll('.wcc-tab'));
+        nodes.jsBuild = document.getElementById('wcc-js-build');
+
+        if (nodes.jsBuild) {
+            nodes.jsBuild.textContent = 'JS ' + (config.assetVersion || 'unknown');
+        }
 
         bindEvents();
         startClock();
@@ -312,6 +317,10 @@
             url.searchParams.set(key, options.query[key]);
         });
 
+        if ((options.method || 'GET').toUpperCase() === 'GET') {
+            url.searchParams.set('_wcc_asset', config.assetVersion || '1');
+        }
+
         const headers = {
             Accept: 'application/json',
             'X-WP-Nonce': config.nonce || '',
@@ -320,6 +329,7 @@
         const fetchOptions = {
             method: options.method || 'GET',
             credentials: 'same-origin',
+            cache: 'no-store',
             headers: headers,
         };
 
@@ -729,26 +739,28 @@
     }
 
     function getRenderableCompanionSteps(visibleSteps) {
-        const steps = visibleSteps.slice(0, 4);
-        let nextIndex = steps.length;
-
-        if (!steps.length || !steps.some(function (step) {
+        const defaultLimit = 4;
+        const sessionIndex = visibleSteps.findIndex(function (step) {
             return step.type === 'session';
-        })) {
-            return steps;
+        });
+        let limit = Math.min(defaultLimit, visibleSteps.length);
+
+        if (sessionIndex === -1 || sessionIndex >= limit) {
+            return visibleSteps.slice(0, limit);
         }
 
-        while (visibleSteps[nextIndex] && ['gap', 'day-end'].indexOf(visibleSteps[nextIndex].type) !== -1) {
-            steps.push(visibleSteps[nextIndex]);
+        let tailIndex = sessionIndex + 1;
+        while (visibleSteps[tailIndex] && ['gap', 'day-end'].indexOf(visibleSteps[tailIndex].type) !== -1) {
+            tailIndex++;
 
-            if (visibleSteps[nextIndex].type === 'day-end') {
+            if (visibleSteps[tailIndex - 1].type === 'day-end') {
                 break;
             }
-
-            nextIndex++;
         }
 
-        return steps;
+        limit = Math.max(limit, tailIndex);
+
+        return visibleSteps.slice(0, limit);
     }
 
     function getAnimatedCompanionSteps(steps, now) {

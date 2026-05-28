@@ -966,6 +966,13 @@ a:focus-visible {
     border-radius: 8px;
 }
 
+.wcc-build {
+    margin-top: 18px;
+    color: var(--wcc-muted);
+    font-size: 0.78rem;
+    text-align: center;
+}
+
 @media (prefers-color-scheme: dark) {
     :root {
         --wcc-border: rgba(226, 232, 240, 0.2);
