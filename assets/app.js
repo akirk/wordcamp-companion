@@ -33,6 +33,7 @@
         nodes.debugReset = document.getElementById('wcc-debug-reset');
         nodes.debugJumps = Array.from(document.querySelectorAll('[data-debug-jump]'));
         nodes.debugStart = document.querySelector('[data-debug-start]');
+        nodes.header = document.querySelector('.wcc-header');
         nodes.currentEvent = document.getElementById('wcc-current-event');
         nodes.planSummary = document.getElementById('wcc-plan-summary');
         nodes.selectedEvent = document.getElementById('wcc-selected-event');
@@ -371,12 +372,15 @@
         const hasSelectedEvent = Boolean(state.selectedEventUrl && getSelectedEvent());
         const isChoosing = state.pickerOpen || !hasSelectedEvent;
         const isFocused = hasSelectedEvent && !isChoosing;
+        const isLiveCompanion = isFocused && state.view === 'companion';
 
         nodes.app.classList.toggle('is-focused', isFocused);
         nodes.app.classList.toggle('is-choosing', isChoosing);
-        nodes.selectedEvent.hidden = !hasSelectedEvent;
+        nodes.app.classList.toggle('is-live-companion', isLiveCompanion);
+        nodes.header.hidden = isLiveCompanion;
+        nodes.selectedEvent.hidden = !hasSelectedEvent || isLiveCompanion;
         nodes.picker.hidden = !isChoosing;
-        nodes.plannerNav.hidden = !hasSelectedEvent;
+        nodes.plannerNav.hidden = !hasSelectedEvent || isLiveCompanion;
         nodes.sidebar.hidden = hasSelectedEvent && !isChoosing;
     }
 
@@ -712,11 +716,35 @@
         }
 
         const wrapper = element('div', { className: 'wcc-companion' });
+        wrapper.append(renderCompanionTopLink());
         visibleSteps.slice(0, 4).forEach(function (step, index) {
             wrapper.append(renderCompanionStep(step, now, index));
         });
 
         nodes.schedule.append(wrapper);
+    }
+
+    function renderCompanionTopLink() {
+        const wrapper = element('div', { className: 'wcc-companion-top' });
+        const button = element('button', {
+            className: 'wcc-organize-link',
+            type: 'button',
+            text: 'Organize',
+        });
+
+        button.addEventListener('click', function () {
+            state.view = 'schedule';
+            state.pickerOpen = false;
+            render();
+
+            if (state.schedule && state.schedule.mode !== 'full') {
+                loadSchedule(false, 'full');
+            }
+        });
+
+        wrapper.append(button);
+
+        return wrapper;
     }
 
     function renderCompanionStep(step, now, index) {

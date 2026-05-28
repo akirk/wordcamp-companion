@@ -47,6 +47,11 @@ a:focus-visible {
     margin: 28px auto 48px;
 }
 
+.wcc-app.is-live-companion {
+    width: min(720px, calc(100% - 24px));
+    margin-top: 14px;
+}
+
 .wcc-debug-clock {
     position: sticky;
     top: 10px;
@@ -423,6 +428,28 @@ a:focus-visible {
 .wcc-companion {
     display: grid;
     gap: 10px;
+}
+
+.wcc-companion-top {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 28px;
+}
+
+.wcc-organize-link {
+    padding: 0;
+    color: var(--wcc-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-size: 0.86rem;
+    font-weight: 650;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.wcc-organize-link:hover {
+    color: var(--wcc-text);
 }
 
 .wcc-companion-note {
