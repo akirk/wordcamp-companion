@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.5';
+    const SCRIPT_BUILD = '20260528.6';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -281,7 +281,9 @@
         }
 
         const savedIds = getSavedSessionIds();
-        if (savedIds.has(sessionId)) {
+        const wasSaved = savedIds.has(sessionId);
+        const localSession = findLocalSession(sessionId);
+        if (wasSaved) {
             savedIds.delete(sessionId);
         } else {
             savedIds.add(sessionId);
@@ -299,7 +301,9 @@
                 },
             }));
             state.alert = null;
-            if (state.view === 'companion' || state.schedule && state.schedule.mode === 'companion') {
+            if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
+                addSessionToCompanionSchedule(localSession);
+            } else if (wasSaved && state.schedule && state.schedule.mode === 'companion') {
                 await loadSchedule(true, 'companion');
             }
         } catch (error) {
@@ -1034,6 +1038,102 @@
         });
 
         return button;
+    }
+
+    function findLocalSession(sessionId) {
+        const id = Number(sessionId);
+        const sessions = state.schedule && Array.isArray(state.schedule.sessions) ? state.schedule.sessions : [];
+        const existing = sessions.find(function (session) {
+            return Number(session.id) === id;
+        });
+
+        if (existing) {
+            return existing;
+        }
+
+        const gaps = state.schedule && Array.isArray(state.schedule.gaps) ? state.schedule.gaps : [];
+        for (let gapIndex = 0; gapIndex < gaps.length; gapIndex++) {
+            const candidates = Array.isArray(gaps[gapIndex].candidates) ? gaps[gapIndex].candidates : [];
+            const candidate = candidates.find(function (session) {
+                return Number(session.id) === id;
+            });
+
+            if (candidate) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    function addSessionToCompanionSchedule(session) {
+        if (!state.schedule || !Array.isArray(state.schedule.sessions)) {
+            return;
+        }
+
+        const sessionId = Number(session.id);
+        const exists = state.schedule.sessions.some(function (existing) {
+            return Number(existing.id) === sessionId;
+        });
+
+        if (!exists) {
+            state.schedule.sessions.push(Object.assign({}, session));
+            state.schedule.sessions.sort(compareSessions);
+        }
+
+        splitLoadedGapsAroundSession(session);
+        state.openGapKey = '';
+        resetCompanionAnimationState();
+    }
+
+    function splitLoadedGapsAroundSession(session) {
+        if (!state.schedule || !Array.isArray(state.schedule.gaps) || !session.start) {
+            return;
+        }
+
+        const timeZone = getSelectedTimezone();
+        const sessionId = Number(session.id);
+        const sessionStart = Number(session.start);
+        const sessionEnd = Number(session.end || session.start);
+        const sessionDayKey = getDateKey(sessionStart, timeZone);
+        const nextGaps = [];
+
+        state.schedule.gaps.forEach(function (gap) {
+            const gapStart = Number(gap.start || 0);
+            const gapEnd = Number(gap.end || gapStart);
+            const candidates = Array.isArray(gap.candidates) ? gap.candidates.filter(function (candidate) {
+                return Number(candidate.id) !== sessionId;
+            }) : [];
+            const containsSession = gap.day_key === sessionDayKey && gapStart <= sessionStart && sessionEnd <= gapEnd;
+
+            if (!containsSession) {
+                nextGaps.push(Object.assign({}, gap, { candidates: candidates }));
+                return;
+            }
+
+            appendLocalGap(nextGaps, gap.day_key, gapStart, sessionStart, candidates);
+            appendLocalGap(nextGaps, gap.day_key, sessionEnd, gapEnd, candidates);
+        });
+
+        state.schedule.gaps = nextGaps;
+    }
+
+    function appendLocalGap(gaps, dayKey, start, end, candidates) {
+        if (end - start < 15 * 60) {
+            return;
+        }
+
+        gaps.push({
+            day_key: dayKey,
+            start: start,
+            end: end,
+            candidates: (candidates || []).filter(function (session) {
+                const sessionStart = Number(session.start || 0);
+                const sessionEnd = Number(session.end || sessionStart);
+
+                return sessionStart >= start && sessionEnd <= end;
+            }),
+        });
     }
 
     function getCompanionStepLabel(step, now, index, timeLabel) {
