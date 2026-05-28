@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: WordCamp Companion
- * Description: A WordPress app powered by WpApp.
+ * Description: Plan your WordCamp attendance and save sessions from event schedules.
  * Version: 1.0.0
  * Author: Alex Kirk
  * Text Domain: wordcamp-companion
@@ -13,6 +13,8 @@ namespace WordCampCompanion;
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
+
+define( 'WORDCAMP_COMPANION_VERSION', '1.0.0' );
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -40,5 +42,6 @@ register_activation_hook( __FILE__, function() {
 } );
 
 register_deactivation_hook( __FILE__, function() {
-    flush_rewrite_rules();
+    $app = new App();
+    $app->deactivate();
 } );

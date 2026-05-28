@@ -1,47 +1,96 @@
 <!DOCTYPE html>
-<html <?php wp_app_language_attributes(); ?>>
+<html <?php echo wp_app_language_attributes(); ?>>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php wp_app_title(); ?></title>
+    <title><?php echo wp_app_title( 'WordCamp Companion' ); ?></title>
     <?php wp_app_head(); ?>
-    <style>
-        :root { color-scheme: light dark; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; line-height: 1.6; background: var(--wp-app-color-background); color: var(--wp-app-color-text); }
-        main { max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
-        h1 { margin-bottom: 0.5rem; }
-        .subtitle { color: var(--wp-app-color-muted); margin-top: 0; }
-        .card { background: var(--wp-app-color-surface); border-radius: 4px; padding: 1.5rem; margin: 1.5rem 0; }
-        .card h2 { margin-top: 0; font-size: 1.1rem; }
-        code { background: var(--wp-app-color-surface-alt); padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }
-        ul { padding-left: 1.25rem; }
-        li { margin: 0.5rem 0; }
-        a { color: var(--wp-app-color-link); }
-    </style>
 </head>
 <body>
     <?php wp_app_body_open(); ?>
 
-    <main>
-        <h1><?php echo esc_html( 'WordCamp Companion' ); ?></h1>
-        <p class="subtitle">Your WpApp application is running.</p>
+    <main id="wordcamp-companion-app" class="wcc-app">
+        <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>">
+            <div>
+                <span class="wcc-kicker"><?php echo esc_html__( 'Debug Time', 'wordcamp-companion' ); ?></span>
+                <strong id="wcc-debug-current"></strong>
+            </div>
+            <button id="wcc-debug-play" class="wcc-debug-play" type="button" aria-pressed="false"><?php echo esc_html__( 'Play', 'wordcamp-companion' ); ?></button>
+            <label class="wcc-debug-rate">
+                <span><?php echo esc_html__( 'Rate', 'wordcamp-companion' ); ?></span>
+                <input id="wcc-debug-rate" type="range" min="1" max="1200" step="1" value="60">
+                <strong id="wcc-debug-rate-label">60x</strong>
+            </label>
+            <div class="wcc-debug-jumps" aria-label="<?php echo esc_attr__( 'Quick time adjustments', 'wordcamp-companion' ); ?>">
+                <button type="button" data-debug-start="wordcamp"><?php echo esc_html__( 'Start', 'wordcamp-companion' ); ?></button>
+                <button type="button" data-debug-jump="-20">-20m</button>
+                <button type="button" data-debug-jump="20">+20m</button>
+                <button type="button" data-debug-jump="-60">-1h</button>
+                <button type="button" data-debug-jump="60">+1h</button>
+                <button type="button" data-debug-jump="-1440">-1d</button>
+                <button type="button" data-debug-jump="1440">+1d</button>
+            </div>
+            <button id="wcc-debug-reset" class="wcc-button" type="button"><?php echo esc_html__( 'Reset', 'wordcamp-companion' ); ?></button>
+        </section>
 
-        <div class="card">
-            <h2>Getting Started</h2>
-            <ul>
-                <li>Edit <code>templates/index.php</code> to customize this page</li>
-                <li>Add routes in your main plugin file to create new pages</li>
-                <li>Configure options like <code>require_login</code> or <code>show_masterbar_for_anonymous</code></li>
-            </ul>
-        </div>
+        <header class="wcc-header">
+            <div>
+                <h1><?php echo esc_html__( 'WordCamp Companion', 'wordcamp-companion' ); ?></h1>
+                <p id="wcc-current-event" class="wcc-current-event"></p>
+            </div>
+            <div id="wcc-plan-summary" class="wcc-plan-summary"></div>
+        </header>
 
-        <div class="card">
-            <h2>Documentation</h2>
-            <p>
-                Learn about routing, the masterbar, access control, and more:<br>
-                <a href="https://github.com/akirk/wp-app/blob/main/README.md" target="_blank">github.com/akirk/wp-app</a>
-            </p>
-        </div>
+        <section id="wcc-selected-event" class="wcc-selected-event" hidden>
+            <div>
+                <span class="wcc-kicker"><?php echo esc_html__( 'Selected WordCamp', 'wordcamp-companion' ); ?></span>
+                <h2 id="wcc-selected-title"></h2>
+                <p id="wcc-selected-meta"></p>
+            </div>
+            <div class="wcc-selected-actions">
+                <a id="wcc-open-event" class="wcc-button" href="#" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Event Site', 'wordcamp-companion' ); ?></a>
+                <button id="wcc-change-event" class="wcc-button" type="button"><?php echo esc_html__( 'Change WordCamp', 'wordcamp-companion' ); ?></button>
+            </div>
+        </section>
+
+        <section id="wcc-picker" class="wcc-picker" aria-label="<?php echo esc_attr__( 'Choose a WordCamp', 'wordcamp-companion' ); ?>">
+            <label class="wcc-field">
+                <span><?php echo esc_html__( 'WordCamp', 'wordcamp-companion' ); ?></span>
+                <select id="wcc-event-select">
+                    <option value=""><?php echo esc_html__( 'Loading WordCamps...', 'wordcamp-companion' ); ?></option>
+                </select>
+            </label>
+
+            <div class="wcc-actions">
+                <button id="wcc-refresh-events" class="wcc-button" type="button"><?php echo esc_html__( 'Refresh Events', 'wordcamp-companion' ); ?></button>
+            </div>
+        </section>
+
+        <section id="wcc-planner-nav" class="wcc-planner-nav" aria-label="<?php echo esc_attr__( 'Planner controls', 'wordcamp-companion' ); ?>">
+            <div class="wcc-tabs" role="tablist" aria-label="<?php echo esc_attr__( 'Schedule views', 'wordcamp-companion' ); ?>">
+                <button id="wcc-tab-companion" class="wcc-tab is-active" type="button" role="tab" aria-selected="true" data-view="companion"><?php echo esc_html__( 'Companion', 'wordcamp-companion' ); ?></button>
+                <button id="wcc-tab-schedule" class="wcc-tab" type="button" role="tab" aria-selected="false" data-view="schedule"><?php echo esc_html__( 'Schedule', 'wordcamp-companion' ); ?></button>
+                <button id="wcc-tab-plan" class="wcc-tab" type="button" role="tab" aria-selected="false" data-view="plan"><?php echo esc_html__( 'My Plan', 'wordcamp-companion' ); ?></button>
+            </div>
+            <button id="wcc-refresh-schedule" class="wcc-button" type="button"><?php echo esc_html__( 'Refresh Schedule', 'wordcamp-companion' ); ?></button>
+        </section>
+
+        <div id="wcc-alerts" class="wcc-alerts" aria-live="polite"></div>
+
+        <section class="wcc-content">
+            <aside class="wcc-sidebar" aria-label="<?php echo esc_attr__( 'Upcoming WordCamps', 'wordcamp-companion' ); ?>">
+                <div class="wcc-sidebar-header">
+                    <h2><?php echo esc_html__( 'Upcoming', 'wordcamp-companion' ); ?></h2>
+                    <span id="wcc-event-count" class="wcc-count"></span>
+                </div>
+                <div id="wcc-event-list" class="wcc-event-list"></div>
+            </aside>
+
+            <section class="wcc-main" aria-label="<?php echo esc_attr__( 'WordCamp schedule', 'wordcamp-companion' ); ?>">
+                <div id="wcc-status" class="wcc-status"></div>
+                <div id="wcc-schedule" class="wcc-schedule"></div>
+            </section>
+        </section>
     </main>
 
     <?php wp_app_body_close(); ?>
