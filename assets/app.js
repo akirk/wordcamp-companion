@@ -1212,15 +1212,19 @@
         render();
     }
 
-    function setDebugTimeToWordCampStart() {
-        const start = getFirstWordCampStart();
-        const event = getSelectedEvent();
+    async function setDebugTimeToWordCampStart() {
+        let start = getFirstWordCampStart();
 
-        if (!start && (!event || !event.start)) {
+        if (!start && state.selectedEventUrl && !state.loadingSchedule) {
+            await loadSchedule(false, 'companion');
+            start = getFirstWordCampStart();
+        }
+
+        if (!start) {
             return;
         }
 
-        state.debugOffsetSeconds = Number(start || event.start) - 60 * 60 - Math.floor(Date.now() / 1000);
+        state.debugOffsetSeconds = Number(start) - 60 * 60 - Math.floor(Date.now() / 1000);
         state.debugLastTick = Date.now();
         render();
     }
