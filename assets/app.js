@@ -1,4 +1,5 @@
 (function () {
+    const SCRIPT_BUILD = '20260528.4';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -59,7 +60,7 @@
         nodes.jsBuild = document.getElementById('wcc-js-build');
 
         if (nodes.jsBuild) {
-            nodes.jsBuild.textContent = 'JS ' + (config.assetVersion || 'unknown');
+            nodes.jsBuild.textContent = 'JS ' + (config.assetVersion || SCRIPT_BUILD);
         }
 
         bindEvents();
@@ -318,7 +319,7 @@
         });
 
         if ((options.method || 'GET').toUpperCase() === 'GET') {
-            url.searchParams.set('_wcc_asset', config.assetVersion || '1');
+            url.searchParams.set('_wcc_asset', config.assetVersion || SCRIPT_BUILD);
         }
 
         const headers = {
