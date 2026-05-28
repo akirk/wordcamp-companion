@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.16';
+    const SCRIPT_BUILD = '20260528.17';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1217,16 +1217,22 @@
             return;
         }
 
+        const nextCandidates = (candidates || []).filter(function (session) {
+            const sessionStart = Number(session.start || 0);
+            const sessionEnd = Number(session.end || sessionStart);
+
+            return sessionStart >= start && sessionEnd <= end;
+        });
+
+        if (!nextCandidates.length) {
+            return;
+        }
+
         gaps.push({
             day_key: dayKey,
             start: start,
             end: end,
-            candidates: (candidates || []).filter(function (session) {
-                const sessionStart = Number(session.start || 0);
-                const sessionEnd = Number(session.end || sessionStart);
-
-                return sessionStart >= start && sessionEnd <= end;
-            }),
+            candidates: nextCandidates,
         });
     }
 
@@ -2256,23 +2262,13 @@
             return lazyGaps;
         }
 
-        const gapsByKey = new Map();
-        lazyGaps.forEach(function (gap) {
-            gapsByKey.set(getGapKey(gap), gap);
-        });
-
-        getGapsForDay(dayKey).forEach(function (gap) {
-            const key = getGapKey(gap);
-            const existing = gapsByKey.get(key) || {};
-
-            gapsByKey.set(key, Object.assign({}, existing, gap, {
-                candidates: gap.candidates || existing.candidates || [],
-            }));
-        });
-
-        return Array.from(gapsByKey.values()).sort(function (a, b) {
+        return getGapsForDay(dayKey).filter(hasGapCandidates).sort(function (a, b) {
             return (a.start || 0) - (b.start || 0);
         });
+    }
+
+    function hasGapCandidates(gap) {
+        return Boolean(gap && Array.isArray(gap.candidates) && gap.candidates.length);
     }
 
     function getLazyGapsForDay(sessions, savedIds, dayKey) {
