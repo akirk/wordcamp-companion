@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.8';
+    const SCRIPT_BUILD = '20260528.9';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -310,9 +310,13 @@
         const savedIds = getSavedSessionIds();
         const wasSaved = savedIds.has(sessionId);
         const localSession = findLocalSession(sessionId);
+        const replacedSessions = !wasSaved && localSession ? getConflictsForSession(localSession, savedIds) : [];
         if (wasSaved) {
             savedIds.delete(sessionId);
         } else {
+            replacedSessions.forEach(function (session) {
+                savedIds.delete(session.id);
+            });
             savedIds.add(sessionId);
         }
 
@@ -329,7 +333,7 @@
             }));
             state.alert = null;
             if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
-                addSessionToCompanionSchedule(localSession);
+                addSessionToCompanionSchedule(localSession, replacedSessions);
             } else if (wasSaved && state.schedule && state.schedule.mode === 'companion') {
                 await loadSchedule(true, 'companion');
             }
@@ -738,11 +742,13 @@
 
     function renderTrackSession(session, savedIds, isSpanning) {
         const isSaved = savedIds.has(session.id);
+        const conflicts = isSaved ? [] : getConflictsForSession(session, savedIds);
         const card = element('article', {
             className: [
                 'wcc-track-session',
                 isSpanning ? 'is-spanning' : '',
                 isSaved ? 'is-saved' : '',
+                conflicts.length ? 'has-conflict' : '',
                 session.type === 'custom' ? 'is-custom' : '',
             ].filter(Boolean).join(' '),
         });
@@ -750,7 +756,7 @@
         const button = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
-            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : 'Save'),
+            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Replace' : 'Save')),
         });
 
         if (session.url) {
@@ -772,6 +778,15 @@
 
         if (session.category_names && session.category_names.length) {
             card.append(element('div', { className: 'wcc-session-meta', text: session.category_names.join(', ') }));
+        }
+
+        if (conflicts.length) {
+            card.append(element('div', {
+                className: 'wcc-conflict',
+                text: 'Replaces ' + conflicts.map(function (conflict) {
+                    return conflict.title;
+                }).join(', '),
+            }));
         }
 
         button.disabled = state.savingSessionId !== null;
@@ -1074,8 +1089,9 @@
     }
 
     function renderGapCandidate(session, timeZone) {
+        const conflicts = getConflictsForSession(session, getSavedSessionIds());
         const button = element('button', {
-            className: 'wcc-gap-candidate',
+            className: 'wcc-gap-candidate' + (conflicts.length ? ' has-conflict' : ''),
             type: 'button',
         });
         const meta = [formatSessionTime(session, timeZone)];
@@ -1084,9 +1100,17 @@
             meta.push(session.speaker_names.join(', '));
         }
 
+        if (conflicts.length) {
+            meta.push('Replaces ' + conflicts.map(function (conflict) {
+                return conflict.title || 'saved session';
+            }).join(', '));
+        }
+
         button.append(
             element('strong', {
-                text: state.savingSessionId === session.id ? 'Saving...' : (session.title || 'Untitled session'),
+                text: state.savingSessionId === session.id
+                    ? 'Saving...'
+                    : ((conflicts.length ? 'Replace with ' : '') + (session.title || 'Untitled session')),
             }),
             element('span', { text: meta.join(' / ') })
         );
@@ -1124,12 +1148,21 @@
         return null;
     }
 
-    function addSessionToCompanionSchedule(session) {
+    function addSessionToCompanionSchedule(session, replacedSessions) {
         if (!state.schedule || !Array.isArray(state.schedule.sessions)) {
             return;
         }
 
         const sessionId = Number(session.id);
+        const replacedIds = new Set((replacedSessions || []).map(function (replacedSession) {
+            return Number(replacedSession.id);
+        }));
+        if (replacedIds.size) {
+            state.schedule.sessions = state.schedule.sessions.filter(function (existing) {
+                return !replacedIds.has(Number(existing.id));
+            });
+        }
+
         const exists = state.schedule.sessions.some(function (existing) {
             return Number(existing.id) === sessionId;
         });
@@ -1242,8 +1275,13 @@
         const savedSessions = allSessions.filter(function (session) {
             return savedIds.has(session.id);
         });
+        const savedRealSessions = savedSessions.filter(function (session) {
+            return session.type !== 'custom';
+        });
         const plannedSessions = allSessions.filter(function (session) {
             return savedIds.has(session.id) || session.auto;
+        }).filter(function (session) {
+            return session.type !== 'custom' || !sessionOverlapsAny(session, savedRealSessions);
         });
         const sourceSessions = savedSessions.length ? plannedSessions : allSessions;
         const event = getSelectedEvent();
@@ -1401,12 +1439,13 @@
 
     function renderSession(session, savedIds) {
         const isSaved = savedIds.has(session.id);
-        const conflicts = isSaved ? getConflictsForSession(session, savedIds) : [];
+        const conflicts = getConflictsForSession(session, savedIds);
         const timeZone = getSelectedTimezone();
         const article = element('article', {
             className: [
                 'wcc-session',
                 isSaved ? 'is-saved' : '',
+                !isSaved && conflicts.length ? 'has-conflict' : '',
                 session.type === 'custom' ? 'is-custom' : '',
             ].filter(Boolean).join(' '),
         });
@@ -1456,7 +1495,7 @@
         if (conflicts.length) {
             body.append(element('div', {
                 className: 'wcc-conflict',
-                text: 'Conflicts with ' + conflicts.map(function (conflict) {
+                text: (isSaved ? 'Conflicts with ' : 'Replaces ') + conflicts.map(function (conflict) {
                     return conflict.title;
                 }).join(', '),
             }));
@@ -1465,7 +1504,7 @@
         const toggle = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
-            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : 'Save'),
+            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Replace' : 'Save')),
         });
         toggle.disabled = state.savingSessionId !== null;
         toggle.addEventListener('click', function () {
@@ -2125,17 +2164,17 @@
     }
 
     function getConflictsForSession(session, savedIds) {
-        if (!state.schedule || !session.start || !session.end) {
+        if (!state.schedule || !session.start || !session.end || session.type === 'custom') {
             return [];
         }
 
         return (state.schedule.sessions || []).filter(function (candidate) {
             return candidate.id !== session.id &&
                 savedIds.has(candidate.id) &&
+                candidate.type !== 'custom' &&
                 candidate.start &&
                 candidate.end &&
-                session.start < candidate.end &&
-                candidate.start < session.end;
+                sessionsOverlap(session, candidate);
         });
     }
 
@@ -2156,6 +2195,21 @@
         });
 
         return pairs.size;
+    }
+
+    function sessionsOverlap(first, second) {
+        const firstStart = Number(first && first.start || 0);
+        const firstEnd = Number(first && (first.end || first.start) || 0);
+        const secondStart = Number(second && second.start || 0);
+        const secondEnd = Number(second && (second.end || second.start) || 0);
+
+        return Boolean(firstStart && firstEnd && secondStart && secondEnd && firstStart < secondEnd && secondStart < firstEnd);
+    }
+
+    function sessionOverlapsAny(session, sessions) {
+        return (sessions || []).some(function (candidate) {
+            return candidate.id !== session.id && sessionsOverlap(session, candidate);
+        });
     }
 
     function groupSessionsByDay(sessions, timeZone) {

@@ -762,6 +762,12 @@ a:focus-visible {
     border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 45%);
 }
 
+.wcc-gap-candidate.has-conflict,
+.wcc-track-session.has-conflict,
+.wcc-session.has-conflict {
+    border-color: color-mix(in srgb, var(--wcc-warning), var(--wcc-border) 35%);
+}
+
 .wcc-gap-candidate strong {
     line-height: 1.25;
 }
