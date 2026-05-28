@@ -534,6 +534,41 @@ class PlannerRepository {
             return sanitize_textarea_field( $venue['physical_address'] );
         }
 
-        return '';
+        $street = trim(
+            implode(
+                ' ',
+                array_filter(
+                    [
+                        isset( $venue['street_name'] ) ? sanitize_text_field( (string) $venue['street_name'] ) : '',
+                        isset( $venue['street_number'] ) ? sanitize_text_field( (string) $venue['street_number'] ) : '',
+                    ]
+                )
+            )
+        );
+        $city = trim(
+            implode(
+                ' ',
+                array_filter(
+                    [
+                        isset( $venue['zip'] ) ? sanitize_text_field( (string) $venue['zip'] ) : '',
+                        isset( $venue['city'] ) ? sanitize_text_field( (string) $venue['city'] ) : '',
+                    ]
+                )
+            )
+        );
+
+        return sanitize_textarea_field(
+            implode(
+                "\n",
+                array_filter(
+                    [
+                        $street,
+                        $city,
+                        isset( $venue['state'] ) ? sanitize_text_field( (string) $venue['state'] ) : '',
+                        isset( $venue['country'] ) ? sanitize_text_field( (string) $venue['country'] ) : '',
+                    ]
+                )
+            )
+        );
     }
 }

@@ -522,10 +522,28 @@ class WordCampApi {
         }
 
         $parts = [
-            isset( $event['_venue_street_number'] ) ? $this->normalize_text( $event['_venue_street_number'] ) : '',
-            isset( $event['_venue_street_name'] ) ? $this->normalize_text( $event['_venue_street_name'] ) : '',
-            isset( $event['_venue_zip'] ) ? $this->normalize_text( $event['_venue_zip'] ) : '',
-            isset( $event['_venue_city'] ) ? $this->normalize_text( $event['_venue_city'] ) : '',
+            trim(
+                implode(
+                    ' ',
+                    array_filter(
+                        [
+                            isset( $event['_venue_street_name'] ) ? $this->normalize_text( $event['_venue_street_name'] ) : '',
+                            isset( $event['_venue_street_number'] ) ? $this->normalize_text( $event['_venue_street_number'] ) : '',
+                        ]
+                    )
+                )
+            ),
+            trim(
+                implode(
+                    ' ',
+                    array_filter(
+                        [
+                            isset( $event['_venue_zip'] ) ? $this->normalize_text( $event['_venue_zip'] ) : '',
+                            isset( $event['_venue_city'] ) ? $this->normalize_text( $event['_venue_city'] ) : '',
+                        ]
+                    )
+                )
+            ),
             isset( $event['_venue_state'] ) ? $this->normalize_text( $event['_venue_state'] ) : '',
             isset( $event['_venue_country_name'] ) ? $this->normalize_text( $event['_venue_country_name'] ) : '',
         ];
