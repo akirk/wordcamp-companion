@@ -10,29 +10,6 @@
     <?php wp_app_body_open(); ?>
 
     <main id="wordcamp-companion-app" class="wcc-app" data-page="plan">
-        <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>">
-            <div>
-                <span class="wcc-kicker"><?php echo esc_html__( 'Debug Time', 'wordcamp-companion' ); ?></span>
-                <strong id="wcc-debug-current"></strong>
-            </div>
-            <button id="wcc-debug-play" class="wcc-debug-play" type="button" aria-pressed="false"><?php echo esc_html__( 'Play', 'wordcamp-companion' ); ?></button>
-            <label class="wcc-debug-rate">
-                <span><?php echo esc_html__( 'Rate', 'wordcamp-companion' ); ?></span>
-                <input id="wcc-debug-rate" type="range" min="1" max="1200" step="1" value="300">
-                <strong id="wcc-debug-rate-label">300x</strong>
-            </label>
-            <div class="wcc-debug-jumps" aria-label="<?php echo esc_attr__( 'Quick time adjustments', 'wordcamp-companion' ); ?>">
-                <button type="button" data-debug-start="wordcamp"><?php echo esc_html__( 'Start', 'wordcamp-companion' ); ?></button>
-                <button type="button" data-debug-jump="-20">-20m</button>
-                <button type="button" data-debug-jump="20">+20m</button>
-                <button type="button" data-debug-jump="-60">-1h</button>
-                <button type="button" data-debug-jump="60">+1h</button>
-                <button type="button" data-debug-jump="-1440">-1d</button>
-                <button type="button" data-debug-jump="1440">+1d</button>
-            </div>
-            <button id="wcc-debug-reset" class="wcc-button" type="button"><?php echo esc_html__( 'Reset', 'wordcamp-companion' ); ?></button>
-        </section>
-
         <header class="wcc-header">
             <div>
                 <h1><?php echo esc_html__( 'WordCamp Companion', 'wordcamp-companion' ); ?></h1>
