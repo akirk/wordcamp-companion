@@ -315,7 +315,7 @@ class RestController {
             'event_url'  => $schedule['event_url'] ?? '',
             'site_name'  => $schedule['site_name'] ?? '',
             'timezone'   => $schedule['timezone'] ?? '',
-            'days'       => $this->compact_days( $first_sessions_by_day, $last_sessions_by_day ),
+            'days'       => isset( $schedule['days'] ) && is_array( $schedule['days'] ) ? $schedule['days'] : $this->compact_days( $first_sessions_by_day, $last_sessions_by_day ),
             'gaps'       => [],
             'gaps_loaded' => false,
             'sessions'   => array_values( $compact_sessions ),

@@ -191,6 +191,10 @@ class WordCampApi {
         }
 
         $sessions = $this->merge_sessions_by_id( $start_sessions, $sessions );
+        $days = $this->get_companion_day_bounds( $context['event_url'], $context['timezone'] );
+        if ( is_wp_error( $days ) ) {
+            $days = [];
+        }
 
         $tracks = $this->get_companion_tracks( $context );
         $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
@@ -200,6 +204,7 @@ class WordCampApi {
             'site_name'  => $context['site_name'],
             'timezone'   => $context['timezone'],
             'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_tracks ),
+            'days'       => $days,
             'tracks'     => array_values( $normalized_tracks ),
             'fetched_at' => time(),
         ];
@@ -321,6 +326,65 @@ class WordCampApi {
                 trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions'
             )
         );
+    }
+
+    private function get_companion_day_bounds( string $event_url, string $timezone ) {
+        $sessions = $this->get_rest_collection(
+            add_query_arg(
+                [
+                    '_fields' => 'id,meta',
+                    'orderby' => 'session_date',
+                    'order'   => 'asc',
+                ],
+                trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions'
+            )
+        );
+
+        if ( is_wp_error( $sessions ) ) {
+            return $sessions;
+        }
+
+        $days = [];
+        foreach ( $sessions as $session ) {
+            if ( ! is_array( $session ) || empty( $session['meta'] ) || ! is_array( $session['meta'] ) ) {
+                continue;
+            }
+
+            $start = $this->normalize_timestamp( $session['meta']['_wcpt_session_time'] ?? null );
+            if ( ! $start ) {
+                continue;
+            }
+
+            $duration = isset( $session['meta']['_wcpt_session_duration'] ) ? absint( $session['meta']['_wcpt_session_duration'] ) : 0;
+            $end = $duration ? $start + $duration : $start;
+            $day_key = $this->get_day_key( $start, $timezone );
+
+            if ( empty( $days[ $day_key ] ) ) {
+                $days[ $day_key ] = [
+                    'key'   => $day_key,
+                    'start' => $start,
+                    'end'   => $end,
+                ];
+                continue;
+            }
+
+            $days[ $day_key ]['start'] = min( $days[ $day_key ]['start'], $start );
+            $days[ $day_key ]['end'] = max( $days[ $day_key ]['end'], $end );
+        }
+
+        ksort( $days );
+
+        return $days;
+    }
+
+    private function get_day_key( int $timestamp, string $timezone ): string {
+        try {
+            $date = new \DateTime( '@' . $timestamp );
+            $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+            return $date->format( 'Y-m-d' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d', $timestamp );
+        }
     }
 
     private function get_companion_tracks( array $context ) {

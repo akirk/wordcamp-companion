@@ -721,11 +721,34 @@
         const wrapper = element('div', { className: 'wcc-companion' });
         wrapper.append(renderCompanionTopLink());
 
-        visibleSteps.slice(0, 4).forEach(function (step, index) {
+        getRenderableCompanionSteps(visibleSteps).forEach(function (step, index) {
             wrapper.append(renderCompanionStep(step, now, index));
         });
 
         nodes.schedule.append(wrapper);
+    }
+
+    function getRenderableCompanionSteps(visibleSteps) {
+        const steps = visibleSteps.slice(0, 4);
+        let nextIndex = steps.length;
+
+        if (!steps.length || !steps.some(function (step) {
+            return step.type === 'session';
+        })) {
+            return steps;
+        }
+
+        while (visibleSteps[nextIndex] && ['gap', 'day-end'].indexOf(visibleSteps[nextIndex].type) !== -1) {
+            steps.push(visibleSteps[nextIndex]);
+
+            if (visibleSteps[nextIndex].type === 'day-end') {
+                break;
+            }
+
+            nextIndex++;
+        }
+
+        return steps;
     }
 
     function getAnimatedCompanionSteps(steps, now) {
@@ -1054,6 +1077,7 @@
         const timeZone = getSelectedTimezone();
         const steps = [];
         const dayGroups = groupSessionsByDay(sourceSessions, timeZone);
+        const scheduleDayKeys = getScheduleDayKeys();
 
         dayGroups.forEach(function (group, dayIndex) {
             const daySessions = group.sessions.filter(function (session) {
@@ -1140,13 +1164,19 @@
             const dayEnd = getDayEnd(group.key) || plannedDayEnd;
 
             if (dayEnd) {
+                const scheduleDayIndex = scheduleDayKeys.indexOf(group.key);
+                const dayNumber = scheduleDayIndex >= 0 ? scheduleDayIndex + 1 : dayIndex + 1;
+                const isFinalDay = scheduleDayKeys.length
+                    ? scheduleDayIndex === scheduleDayKeys.length - 1
+                    : dayIndex + 1 >= dayGroups.length;
+
                 steps.push({
                     type: 'day-end',
                     dayKey: group.key,
                     start: dayEnd,
                     end: dayEnd + 30 * 60,
-                    title: 'End of Day ' + (dayIndex + 1),
-                    detail: dayIndex + 1 < dayGroups.length ? 'See you tomorrow.' : 'WordCamp day complete.',
+                    title: isFinalDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
+                    detail: isFinalDay ? 'WordCamp complete.' : 'See you tomorrow.',
                     meta: group.label,
                 });
             }
@@ -1738,6 +1768,14 @@
         }
 
         return Number(state.schedule.days[dayKey].end || 0) || null;
+    }
+
+    function getScheduleDayKeys() {
+        if (!state.schedule || !state.schedule.days || typeof state.schedule.days !== 'object') {
+            return [];
+        }
+
+        return Object.keys(state.schedule.days).sort();
     }
 
     function getGapsForDay(dayKey) {
