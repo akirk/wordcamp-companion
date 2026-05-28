@@ -119,17 +119,6 @@ class RestController {
             ]
         );
 
-        register_rest_route(
-            self::NAMESPACE,
-            '/plan/sessions',
-            [
-                [
-                    'methods'             => 'POST',
-                    'callback'            => [ $this, 'save_sessions' ],
-                    'permission_callback' => [ $this, 'can_read' ],
-                ],
-            ]
-        );
     }
 
     public function can_read(): bool {
@@ -630,19 +619,6 @@ class RestController {
         $params = $this->get_request_params( $request );
         $event = isset( $params['event'] ) && is_array( $params['event'] ) ? $params['event'] : $params;
         $plan = $this->repository->set_selected_event( get_current_user_id(), $event );
-
-        if ( is_wp_error( $plan ) ) {
-            return $plan;
-        }
-
-        return rest_ensure_response( $plan );
-    }
-
-    public function save_sessions( WP_REST_Request $request ) {
-        $params = $this->get_request_params( $request );
-        $event_url = isset( $params['event_url'] ) && is_string( $params['event_url'] ) ? $params['event_url'] : '';
-        $session_ids = isset( $params['session_ids'] ) && is_array( $params['session_ids'] ) ? $params['session_ids'] : [];
-        $plan = $this->repository->set_saved_sessions( get_current_user_id(), $event_url, $session_ids );
 
         if ( is_wp_error( $plan ) ) {
             return $plan;

@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.18';
+    const SCRIPT_BUILD = '20260528.19';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -164,14 +164,12 @@
 
     async function loadInitialData() {
         state.loadingEvents = state.page === 'organize';
+        state.plan = normalizePlan(config.initialPlan);
+        state.selectedEventUrl = state.plan.selected_event_url || '';
+        state.pickerOpen = state.page === 'organize' && !state.selectedEventUrl;
         render();
 
         try {
-            const plan = await api('plan');
-            state.plan = normalizePlan(plan);
-            state.selectedEventUrl = state.plan.selected_event_url || '';
-            state.pickerOpen = state.page === 'organize' && !state.selectedEventUrl;
-
             if (state.page === 'organize') {
                 const events = await api('wordcamps');
                 state.events = Array.isArray(events.wordcamps) ? events.wordcamps : [];
@@ -311,23 +309,28 @@
         const savedIds = getSavedSessionIds();
         const wasSaved = savedIds.has(sessionId);
         const localSession = findLocalSession(sessionId);
-        if (wasSaved) {
-            savedIds.delete(sessionId);
-        } else {
-            savedIds.add(sessionId);
-        }
+        const savedPost = getSavedSessionPost(sessionId);
 
         state.savingSessionId = sessionId;
         render();
 
         try {
-            state.plan = normalizePlan(await api('plan/sessions', {
-                method: 'POST',
-                body: {
-                    event_url: state.selectedEventUrl,
-                    session_ids: Array.from(savedIds),
-                },
-            }));
+            if (wasSaved) {
+                if (!savedPost || !savedPost.post_id) {
+                    throw new Error('Saved session post was not found.');
+                }
+
+                await deleteSavedSessionPost(savedPost.post_id);
+                removeSavedSessionPost(sessionId);
+            } else {
+                if (!localSession) {
+                    throw new Error('Session details were not found.');
+                }
+
+                const createdPost = await createSavedSessionPost(localSession);
+                addSavedSessionPost(normalizeSavedSessionPost(createdPost, localSession));
+            }
+
             state.alert = null;
             if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
                 addSessionToCompanionSchedule(localSession);
@@ -344,13 +347,22 @@
 
     async function api(path, options) {
         options = options || {};
-        const url = new URL(path.replace(/^\/+/, ''), config.restUrl);
+        return requestJson(config.restUrl, path, options, true);
+    }
+
+    async function wpApi(path, options) {
+        options = options || {};
+        return requestJson(config.wpRestUrl, path, options, false);
+    }
+
+    async function requestJson(baseUrl, path, options, addAssetVersion) {
+        const url = new URL(path.replace(/^\/+/, ''), baseUrl);
 
         Object.keys(options.query || {}).forEach(function (key) {
             url.searchParams.set(key, options.query[key]);
         });
 
-        if ((options.method || 'GET').toUpperCase() === 'GET') {
+        if (addAssetVersion && (options.method || 'GET').toUpperCase() === 'GET') {
             url.searchParams.set('_wcc_asset', config.assetVersion || SCRIPT_BUILD);
         }
 
@@ -1161,6 +1173,86 @@
         });
 
         return button;
+    }
+
+    async function createSavedSessionPost(session) {
+        const selectedPlan = ensureSelectedPlan();
+        const termId = Number(selectedPlan.wordcamp_term_id || state.plan.selected_wordcamp_term_id || 0);
+        const body = {
+            title: session.title || 'Untitled session',
+            status: 'publish',
+            meta: buildSavedSessionMeta(session, termId),
+        };
+        const taxonomyRestBase = config.wordcampTaxonomyRestBase || 'wordcamp-companion-wordcamps';
+
+        if (termId) {
+            body[taxonomyRestBase] = [termId];
+        }
+
+        return wpApi(config.savedSessionRestBase || 'wordcamp-companion-sessions', {
+            method: 'POST',
+            body: body,
+        });
+    }
+
+    async function deleteSavedSessionPost(postId) {
+        return wpApi((config.savedSessionRestBase || 'wordcamp-companion-sessions') + '/' + Number(postId), {
+            method: 'DELETE',
+            query: { force: 'true' },
+        });
+    }
+
+    function buildSavedSessionMeta(session, termId) {
+        return {
+            wcc_event_url: state.selectedEventUrl,
+            wcc_wordcamp_term_id: termId,
+            wcc_session_id: Number(session.id || 0),
+            wcc_session_url: session.url || '',
+            wcc_session_start: Number(session.start || 0),
+            wcc_session_end: Number(session.end || 0),
+            wcc_session_duration: Number(session.duration || 0),
+            wcc_session_type: session.type || '',
+            wcc_speaker_names: listToMeta(session.speaker_names),
+            wcc_track_names: listToMeta(session.track_names),
+            wcc_category_names: listToMeta(session.category_names),
+            wcc_session_snapshot: JSON.stringify(session),
+        };
+    }
+
+    function listToMeta(values) {
+        return (Array.isArray(values) ? values : []).join('\n');
+    }
+
+    function normalizeSavedSessionPost(post, fallbackSession) {
+        const meta = post && post.meta && typeof post.meta === 'object' ? post.meta : {};
+        const fallback = fallbackSession || {};
+        const title = post && post.title && typeof post.title === 'object'
+            ? (post.title.raw || post.title.rendered || fallback.title || '')
+            : (fallback.title || '');
+
+        return {
+            post_id: Number(post && post.id || 0),
+            session_id: Number(meta.wcc_session_id || fallback.id || 0),
+            event_url: meta.wcc_event_url || state.selectedEventUrl,
+            title: title,
+            url: meta.wcc_session_url || fallback.url || '',
+            start: Number(meta.wcc_session_start || fallback.start || 0),
+            end: Number(meta.wcc_session_end || fallback.end || 0),
+            duration: Number(meta.wcc_session_duration || fallback.duration || 0),
+            type: meta.wcc_session_type || fallback.type || '',
+            speaker_names: metaToList(meta.wcc_speaker_names, fallback.speaker_names),
+            track_names: metaToList(meta.wcc_track_names, fallback.track_names),
+            category_names: metaToList(meta.wcc_category_names, fallback.category_names),
+            updated_at: Math.floor(Date.now() / 1000),
+        };
+    }
+
+    function metaToList(value, fallback) {
+        if (typeof value !== 'string' || !value) {
+            return Array.isArray(fallback) ? fallback : [];
+        }
+
+        return value.split(/\r\n|\r|\n/).filter(Boolean);
     }
 
     function findLocalSession(sessionId) {
@@ -2159,6 +2251,11 @@
             return state.schedule.event;
         }
 
+        const selectedPlan = getSelectedPlan();
+        if (selectedPlan && selectedPlan.event && selectedPlan.event.event_url === state.selectedEventUrl) {
+            return selectedPlan.event;
+        }
+
         return getEventByUrl(state.selectedEventUrl);
     }
 
@@ -2170,6 +2267,28 @@
         return state.plan.plans[state.selectedEventUrl] || null;
     }
 
+    function ensureSelectedPlan() {
+        if (!state.selectedEventUrl) {
+            return {};
+        }
+
+        if (!state.plan || typeof state.plan !== 'object') {
+            state.plan = normalizePlan(null);
+        }
+
+        if (!state.plan.plans[state.selectedEventUrl]) {
+            state.plan.plans[state.selectedEventUrl] = {
+                event: getSelectedEvent() || { event_url: state.selectedEventUrl },
+                wordcamp_term_id: state.plan.selected_wordcamp_term_id || 0,
+                saved_session_ids: [],
+                saved_sessions: [],
+                updated_at: 0,
+            };
+        }
+
+        return state.plan.plans[state.selectedEventUrl];
+    }
+
     function getSavedSessionIds() {
         const selectedPlan = getSelectedPlan();
         const ids = selectedPlan && Array.isArray(selectedPlan.saved_session_ids) ? selectedPlan.saved_session_ids : [];
@@ -2179,6 +2298,50 @@
         }).filter(function (id) {
             return id > 0;
         }));
+    }
+
+    function getSavedSessionPost(sessionId) {
+        const selectedPlan = getSelectedPlan();
+        const posts = selectedPlan && Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions : [];
+        const id = Number(sessionId);
+
+        return posts.find(function (post) {
+            return Number(post.session_id) === id;
+        }) || null;
+    }
+
+    function addSavedSessionPost(savedPost) {
+        if (!savedPost || !savedPost.session_id) {
+            return;
+        }
+
+        const selectedPlan = ensureSelectedPlan();
+        const posts = Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions.slice() : [];
+        const ids = new Set((selectedPlan.saved_session_ids || []).map(Number));
+
+        selectedPlan.saved_sessions = posts.filter(function (post) {
+            return Number(post.session_id) !== Number(savedPost.session_id);
+        }).concat([savedPost]).sort(function (a, b) {
+            return Number(a.start || 0) - Number(b.start || 0);
+        });
+        ids.add(Number(savedPost.session_id));
+        selectedPlan.saved_session_ids = Array.from(ids).filter(Boolean);
+        selectedPlan.updated_at = Math.floor(Date.now() / 1000);
+        state.plan.saved_session_posts = selectedPlan.saved_sessions;
+    }
+
+    function removeSavedSessionPost(sessionId) {
+        const selectedPlan = ensureSelectedPlan();
+        const id = Number(sessionId);
+
+        selectedPlan.saved_sessions = (selectedPlan.saved_sessions || []).filter(function (post) {
+            return Number(post.session_id) !== id;
+        });
+        selectedPlan.saved_session_ids = (selectedPlan.saved_session_ids || []).map(Number).filter(function (savedId) {
+            return savedId && savedId !== id;
+        });
+        selectedPlan.updated_at = Math.floor(Date.now() / 1000);
+        state.plan.saved_session_posts = selectedPlan.saved_sessions;
     }
 
     function getSelectedTimezone() {
@@ -2583,6 +2746,8 @@
     function normalizePlan(plan) {
         return {
             selected_event_url: plan && plan.selected_event_url ? plan.selected_event_url : '',
+            selected_wordcamp_term_id: plan && plan.selected_wordcamp_term_id ? Number(plan.selected_wordcamp_term_id) : 0,
+            saved_session_posts: plan && Array.isArray(plan.saved_session_posts) ? plan.saved_session_posts : [],
             plans: plan && plan.plans && typeof plan.plans === 'object' ? plan.plans : {},
         };
     }

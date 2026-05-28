@@ -25,6 +25,7 @@ class App extends BaseApp {
             ]
         );
 
+        add_action( 'init', [ PlannerRepository::class, 'register_content_types' ] );
         add_action( 'rest_api_init', [ $this->rest_controller, 'register_routes' ] );
         $this->enqueue_assets();
     }
@@ -38,7 +39,7 @@ class App extends BaseApp {
     }
 
     protected function setup_database(): void {
-        // Personal plans are stored in user meta; remote API payloads are cached in transients.
+        // Saved sessions are stored as authored CPT entries; remote API payloads are cached in transients.
     }
 
     protected function setup_routes(): void {
@@ -55,6 +56,7 @@ class App extends BaseApp {
     }
 
     public function activate(): void {
+        PlannerRepository::register_content_types();
         flush_rewrite_rules();
     }
 
@@ -84,14 +86,18 @@ class App extends BaseApp {
                 echo '<script id="wordcamp-companion-config-inline-js">' . "\n";
                 echo 'window.WordCampCompanionConfig = ' . wp_json_encode(
                     [
-                        'restUrl'        => rest_url( 'wordcamp-companion/v1/' ),
-                        'nonce'          => wp_create_nonce( 'wp_rest' ),
-                        'loginUrl'       => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
-                        'appUrl'         => home_url( '/' . $this->get_url_path() . '/' ),
-                        'organizeUrl'    => home_url( '/' . $this->get_url_path() . '/organize/' ),
-                        'assetVersion'   => $asset_version,
-                        'timeFormat'     => get_option( 'time_format' ),
-                        'uses24HourTime' => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),
+                        'restUrl'                 => rest_url( 'wordcamp-companion/v1/' ),
+                        'wpRestUrl'               => rest_url( 'wp/v2/' ),
+                        'nonce'                   => wp_create_nonce( 'wp_rest' ),
+                        'loginUrl'                => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
+                        'appUrl'                  => home_url( '/' . $this->get_url_path() . '/' ),
+                        'organizeUrl'             => home_url( '/' . $this->get_url_path() . '/organize/' ),
+                        'assetVersion'            => $asset_version,
+                        'timeFormat'              => get_option( 'time_format' ),
+                        'uses24HourTime'          => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),
+                        'initialPlan'             => is_user_logged_in() ? $this->repository->get_plan( get_current_user_id() ) : null,
+                        'savedSessionRestBase'    => PlannerRepository::POST_REST_BASE,
+                        'wordcampTaxonomyRestBase' => PlannerRepository::TAXONOMY_REST_BASE,
                     ]
                 ) . ';' . "\n";
                 echo '</script>' . "\n";
