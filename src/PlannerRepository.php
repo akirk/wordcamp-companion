@@ -14,6 +14,9 @@ class PlannerRepository {
     private const SELECTED_TERM_META_KEY = 'wordcamp_companion_selected_wordcamp';
     private const EVENT_META_KEY = 'wcc_event';
     private const EVENT_URL_META_KEY = 'wcc_event_url';
+    private const SCHEDULE_DAYS_META_KEY = 'wcc_schedule_days';
+    private const SCHEDULE_TIMEZONE_META_KEY = 'wcc_schedule_timezone';
+    private const SCHEDULE_SITE_NAME_META_KEY = 'wcc_schedule_site_name';
 
     private WordCampApi $api;
 
@@ -141,6 +144,38 @@ class PlannerRepository {
         return $this->get_plan( $user_id );
     }
 
+    public function store_schedule_metadata( string $event_url, array $schedule, array $days ): void {
+        $event_url = $this->api->normalize_event_site_url( $event_url );
+        if ( '' === $event_url || ! $this->api->is_allowed_wordcamp_url( $event_url ) ) {
+            return;
+        }
+
+        $term_id = $this->get_wordcamp_term_id_by_event_url( $event_url );
+        if ( ! $term_id ) {
+            $term_id = $this->ensure_wordcamp_term(
+                [
+                    'event_url' => $event_url,
+                    'title'     => isset( $schedule['site_name'] ) ? (string) $schedule['site_name'] : $event_url,
+                    'timezone'  => isset( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '',
+                ]
+            );
+        }
+
+        if ( is_wp_error( $term_id ) || ! $term_id ) {
+            return;
+        }
+
+        update_term_meta( $term_id, self::SCHEDULE_DAYS_META_KEY, wp_json_encode( $this->sanitize_schedule_days( $days ) ) );
+
+        if ( ! empty( $schedule['timezone'] ) ) {
+            update_term_meta( $term_id, self::SCHEDULE_TIMEZONE_META_KEY, sanitize_text_field( (string) $schedule['timezone'] ) );
+        }
+
+        if ( ! empty( $schedule['site_name'] ) ) {
+            update_term_meta( $term_id, self::SCHEDULE_SITE_NAME_META_KEY, sanitize_text_field( (string) $schedule['site_name'] ) );
+        }
+    }
+
     private static function register_meta(): void {
         $auth_callback = function (): bool {
             return is_user_logged_in() && current_user_can( 'read' );
@@ -215,6 +250,32 @@ class PlannerRepository {
                 'auth_callback'     => $auth_callback,
             ]
         );
+
+        register_term_meta(
+            self::TAXONOMY,
+            self::SCHEDULE_DAYS_META_KEY,
+            [
+                'single'            => true,
+                'type'              => 'string',
+                'show_in_rest'      => true,
+                'sanitize_callback' => 'sanitize_textarea_field',
+                'auth_callback'     => $auth_callback,
+            ]
+        );
+
+        foreach ( [ self::SCHEDULE_TIMEZONE_META_KEY, self::SCHEDULE_SITE_NAME_META_KEY ] as $meta_key ) {
+            register_term_meta(
+                self::TAXONOMY,
+                $meta_key,
+                [
+                    'single'            => true,
+                    'type'              => 'string',
+                    'show_in_rest'      => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'auth_callback'     => $auth_callback,
+                ]
+            );
+        }
     }
 
     private function empty_plan(): array {
@@ -306,7 +367,61 @@ class PlannerRepository {
             $event['event_url'] = get_term_meta( $term_id, self::EVENT_URL_META_KEY, true );
         }
 
+        $schedule_days = $this->get_schedule_days_from_term( $term_id );
+        if ( $schedule_days ) {
+            $event['schedule_days'] = $schedule_days;
+        }
+
+        $schedule_timezone = (string) get_term_meta( $term_id, self::SCHEDULE_TIMEZONE_META_KEY, true );
+        if ( '' !== $schedule_timezone ) {
+            $event['schedule_timezone'] = sanitize_text_field( $schedule_timezone );
+        }
+
+        $site_name = (string) get_term_meta( $term_id, self::SCHEDULE_SITE_NAME_META_KEY, true );
+        if ( '' !== $site_name ) {
+            $event['site_name'] = sanitize_text_field( $site_name );
+        }
+
         return $this->sanitize_event_snapshot( $event );
+    }
+
+    private function get_schedule_days_from_term( int $term_id ): array {
+        $raw_days = get_term_meta( $term_id, self::SCHEDULE_DAYS_META_KEY, true );
+        if ( ! is_string( $raw_days ) || '' === $raw_days ) {
+            return [];
+        }
+
+        $decoded = json_decode( $raw_days, true );
+
+        return is_array( $decoded ) ? $this->sanitize_schedule_days( $decoded ) : [];
+    }
+
+    private function sanitize_schedule_days( array $days ): array {
+        $sanitized = [];
+
+        foreach ( $days as $key => $day ) {
+            if ( ! is_array( $day ) ) {
+                continue;
+            }
+
+            $day_key = isset( $day['key'] ) ? sanitize_text_field( (string) $day['key'] ) : sanitize_text_field( (string) $key );
+            $start = isset( $day['start'] ) ? absint( $day['start'] ) : 0;
+            $end = isset( $day['end'] ) ? absint( $day['end'] ) : 0;
+
+            if ( '' === $day_key || ! $start ) {
+                continue;
+            }
+
+            $sanitized[ $day_key ] = [
+                'key'   => $day_key,
+                'start' => $start,
+                'end'   => $end ?: $start,
+            ];
+        }
+
+        ksort( $sanitized );
+
+        return $sanitized;
     }
 
     private function get_saved_session_posts( int $user_id, int $term_id ): array {
@@ -393,6 +508,9 @@ class PlannerRepository {
             'end'         => isset( $event['end'] ) ? absint( $event['end'] ) : null,
             'event_url'   => $event_url,
             'timezone'    => isset( $event['timezone'] ) ? sanitize_text_field( $event['timezone'] ) : '',
+            'schedule_timezone' => isset( $event['schedule_timezone'] ) ? sanitize_text_field( $event['schedule_timezone'] ) : '',
+            'site_name'   => isset( $event['site_name'] ) ? sanitize_text_field( $event['site_name'] ) : '',
+            'schedule_days' => isset( $event['schedule_days'] ) && is_array( $event['schedule_days'] ) ? $this->sanitize_schedule_days( $event['schedule_days'] ) : [],
             'country'     => isset( $event['country'] ) ? sanitize_text_field( $event['country'] ) : '',
             'coordinates' => $event['coordinates'] ?? null,
             'venue'       => $this->sanitize_venue_snapshot( isset( $event['venue'] ) && is_array( $event['venue'] ) ? $event['venue'] : [] ),
@@ -401,16 +519,21 @@ class PlannerRepository {
 
     private function sanitize_venue_snapshot( array $venue ): array {
         return [
-            'name'             => isset( $venue['name'] ) ? sanitize_text_field( $venue['name'] ) : '',
-            'physical_address' => isset( $venue['physical_address'] ) ? sanitize_text_field( $venue['physical_address'] ) : '',
-            'street_name'      => isset( $venue['street_name'] ) ? sanitize_text_field( $venue['street_name'] ) : '',
-            'street_number'    => isset( $venue['street_number'] ) ? sanitize_text_field( $venue['street_number'] ) : '',
-            'city'             => isset( $venue['city'] ) ? sanitize_text_field( $venue['city'] ) : '',
-            'state'            => isset( $venue['state'] ) ? sanitize_text_field( $venue['state'] ) : '',
-            'country_code'     => isset( $venue['country_code'] ) ? sanitize_text_field( $venue['country_code'] ) : '',
-            'country'          => isset( $venue['country'] ) ? sanitize_text_field( $venue['country'] ) : '',
-            'zip'              => isset( $venue['zip'] ) ? sanitize_text_field( $venue['zip'] ) : '',
-            'coordinates'      => $venue['coordinates'] ?? null,
+            'name'        => isset( $venue['name'] ) ? sanitize_text_field( $venue['name'] ) : '',
+            'address'     => $this->get_venue_address( $venue ),
+            'coordinates' => $venue['coordinates'] ?? null,
         ];
+    }
+
+    private function get_venue_address( array $venue ): string {
+        if ( isset( $venue['address'] ) && is_string( $venue['address'] ) ) {
+            return sanitize_textarea_field( $venue['address'] );
+        }
+
+        if ( isset( $venue['physical_address'] ) && is_string( $venue['physical_address'] ) ) {
+            return sanitize_textarea_field( $venue['physical_address'] );
+        }
+
+        return '';
     }
 }

@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.19';
+    const SCRIPT_BUILD = '20260528.20';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -167,6 +167,9 @@
         state.plan = normalizePlan(config.initialPlan);
         state.selectedEventUrl = state.plan.selected_event_url || '';
         state.pickerOpen = state.page === 'organize' && !state.selectedEventUrl;
+        if (state.page === 'companion' && state.selectedEventUrl) {
+            state.schedule = buildLocalCompanionSchedule();
+        }
         render();
 
         try {
@@ -179,7 +182,12 @@
             render();
 
             if (state.selectedEventUrl) {
-                await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
+                if (state.page === 'companion') {
+                    state.schedule = buildLocalCompanionSchedule();
+                    resetCompanionAnimationState();
+                } else {
+                    await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
+                }
             }
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
@@ -234,7 +242,12 @@
                 body: { event: event },
             }));
             state.pickerOpen = false;
-            await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
+            if (state.view === 'companion') {
+                state.schedule = buildLocalCompanionSchedule();
+                resetCompanionAnimationState();
+            } else {
+                await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
+            }
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
         } finally {
@@ -251,6 +264,14 @@
         }
 
         mode = mode || (state.view === 'schedule' ? 'full' : 'companion');
+        if (mode === 'companion') {
+            state.schedule = buildLocalCompanionSchedule();
+            state.loadingSchedule = false;
+            state.alert = null;
+            render();
+            return;
+        }
+
         state.loadingSchedule = true;
         state.alert = null;
         render();
@@ -272,6 +293,118 @@
             state.loadingSchedule = false;
             render();
         }
+    }
+
+    function buildLocalCompanionSchedule() {
+        const event = getSelectedEvent();
+        const selectedPlan = getSelectedPlan();
+        const savedPosts = selectedPlan && Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions : [];
+        const sessions = savedPosts.map(savedSessionPostToSession).filter(function (session) {
+            return session.id && session.start;
+        });
+        const days = getLocalCompanionDays(event, sessions);
+
+        if (!sessions.length) {
+            const anchor = getArrivalAnchorSession(days);
+            if (anchor) {
+                sessions.push(anchor);
+            }
+        }
+
+        return {
+            event_url: state.selectedEventUrl,
+            event: event,
+            site_name: event && event.site_name ? event.site_name : '',
+            timezone: event && (event.schedule_timezone || event.timezone) ? (event.schedule_timezone || event.timezone) : '',
+            days: days,
+            gaps: [],
+            gaps_loaded: false,
+            sessions: sessions.sort(compareSessions),
+            mode: 'companion',
+            local: true,
+            fetched_at: Math.floor(Date.now() / 1000),
+        };
+    }
+
+    function savedSessionPostToSession(post) {
+        return {
+            id: Number(post.session_id || 0),
+            title: post.title || 'Untitled session',
+            url: post.url || '',
+            start: Number(post.start || 0),
+            end: Number(post.end || 0) || null,
+            duration: Number(post.duration || 0),
+            type: post.type || '',
+            speaker_names: Array.isArray(post.speaker_names) ? post.speaker_names : [],
+            track_names: Array.isArray(post.track_names) ? post.track_names : [],
+            category_names: Array.isArray(post.category_names) ? post.category_names : [],
+        };
+    }
+
+    function getLocalCompanionDays(event, sessions) {
+        const timeZone = getValidTimeZone(event && (event.schedule_timezone || event.timezone) ? (event.schedule_timezone || event.timezone) : '');
+        const days = {};
+        const storedDays = event && event.schedule_days && typeof event.schedule_days === 'object' ? event.schedule_days : {};
+
+        Object.keys(storedDays).forEach(function (dayKey) {
+            const day = storedDays[dayKey];
+            const start = Number(day && day.start || 0);
+            const end = Number(day && day.end || start);
+
+            if (start) {
+                days[dayKey] = { key: dayKey, start: start, end: end || start };
+            }
+        });
+
+        const storedDayKeys = new Set(Object.keys(days));
+
+        (sessions || []).forEach(function (session) {
+            const start = Number(session.start || 0);
+            const end = Number(session.end || start);
+            if (!start) {
+                return;
+            }
+
+            const dayKey = getDateKey(start, timeZone);
+            const inferredStart = storedDayKeys.has(dayKey) ? start : Math.max(0, start - 2 * 60 * 60);
+            if (!days[dayKey]) {
+                days[dayKey] = { key: dayKey, start: inferredStart, end: end || start };
+                return;
+            }
+
+            if (!storedDayKeys.has(dayKey)) {
+                days[dayKey].start = Math.min(days[dayKey].start, inferredStart);
+            }
+            days[dayKey].end = Math.max(days[dayKey].end || days[dayKey].start, end || start);
+        });
+
+        return Object.keys(days).sort().reduce(function (sorted, dayKey) {
+            sorted[dayKey] = days[dayKey];
+            return sorted;
+        }, {});
+    }
+
+    function getArrivalAnchorSession(days) {
+        const firstDayKey = Object.keys(days || {}).sort()[0];
+        const firstDay = firstDayKey ? days[firstDayKey] : null;
+        const start = Number(firstDay && firstDay.start || 0);
+
+        if (!start) {
+            return null;
+        }
+
+        return {
+            id: -start,
+            title: 'Arrival anchor',
+            start: start,
+            end: start,
+            duration: 0,
+            type: 'anchor',
+            arrival_anchor: true,
+            speaker_names: [],
+            track_names: [],
+            category_names: [],
+        };
     }
 
     async function loadGapCandidates(gapKey) {
@@ -335,7 +468,8 @@
             if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
                 addSessionToCompanionSchedule(localSession);
             } else if (wasSaved && state.schedule && state.schedule.mode === 'companion') {
-                await loadSchedule(true, 'companion');
+                state.schedule = buildLocalCompanionSchedule();
+                resetCompanionAnimationState();
             }
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
@@ -1464,7 +1598,7 @@
             }
 
             const firstSession = daySessions[0];
-            const dayStart = dayStartFromSchedule || firstSession.start;
+            const dayStart = dayStartFromSchedule || Math.max(0, firstSession.start - 2 * 60 * 60);
             const arrivalStart = Math.max(dayStart, firstSession.start - 2 * 60 * 60);
             const firstTrackStart = Math.max(arrivalStart, firstSession.start - 10 * 60);
             steps.push({
@@ -2149,18 +2283,12 @@
 
         const venue = event.venue && typeof event.venue === 'object' ? event.venue : {};
         const lines = [];
-        const street = [venue.street_name, venue.street_number].filter(Boolean).join(' ');
-        const city = [venue.zip, venue.city].filter(Boolean).join(' ');
 
-        [venue.name, street, city, venue.country].forEach(function (line) {
+        [venue.name, venue.address || venue.physical_address].forEach(function (line) {
             if (line && lines.indexOf(line) === -1) {
                 lines.push(line);
             }
         });
-
-        if (!lines.length && venue.physical_address) {
-            lines.push(venue.physical_address);
-        }
 
         if (!lines.length) {
             [event.location, event.country].forEach(function (line) {
@@ -2347,7 +2475,9 @@
     function getSelectedTimezone() {
         const selectedEvent = getSelectedEvent();
         const scheduleTimezone = state.schedule && state.schedule.timezone ? state.schedule.timezone : '';
-        const eventTimezone = selectedEvent && selectedEvent.timezone ? selectedEvent.timezone : '';
+        const eventTimezone = selectedEvent && (selectedEvent.schedule_timezone || selectedEvent.timezone)
+            ? (selectedEvent.schedule_timezone || selectedEvent.timezone)
+            : '';
 
         return getValidTimeZone(scheduleTimezone || eventTimezone);
     }

@@ -152,7 +152,9 @@ class RestController {
             return $schedule;
         }
 
+        $schedule['days'] = $this->get_schedule_days( $schedule );
         $schedule['mode'] = 'full';
+        $this->repository->store_schedule_metadata( $event_url, $schedule, $schedule['days'] );
 
         return rest_ensure_response( $schedule );
     }
@@ -168,26 +170,7 @@ class RestController {
             );
         }
 
-        $plan = $this->repository->get_plan( get_current_user_id() );
-        $saved_session_ids = $this->get_saved_session_ids( $plan, $event_url );
-        $schedule = $this->api->get_companion_schedule(
-            $event_url,
-            $saved_session_ids,
-            (bool) $request->get_param( 'refresh' ),
-            $this->get_plan_updated_at( $plan, $event_url )
-        );
-
-        if ( is_wp_error( $schedule ) ) {
-            return $schedule;
-        }
-
-        return rest_ensure_response(
-            $this->get_compact_companion_schedule(
-                $schedule,
-                $saved_session_ids,
-                $this->get_companion_event( $plan, $event_url, (bool) $request->get_param( 'refresh' ) )
-            )
-        );
+        return rest_ensure_response( $this->get_local_companion_schedule( $this->repository->get_plan( get_current_user_id() ), $event_url ) );
     }
 
     public function get_gap_candidates( WP_REST_Request $request ) {
@@ -209,11 +192,14 @@ class RestController {
             return $schedule;
         }
 
+        $days = $this->get_schedule_days( $schedule );
+        $this->repository->store_schedule_metadata( $event_url, $schedule, $days );
+
         return rest_ensure_response(
             [
                 'event_url'  => $schedule['event_url'] ?? '',
                 'timezone'   => $schedule['timezone'] ?? '',
-                'days'       => $this->get_schedule_days( $schedule ),
+                'days'       => $days,
                 'gaps'       => $saved_session_ids ? $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids ) : [],
                 'mode'       => 'gap-candidates',
                 'fetched_at' => $schedule['fetched_at'] ?? time(),
@@ -238,6 +224,60 @@ class RestController {
         }
 
         return array_map( 'absint', $plan['plans'][ $event_url ]['saved_session_ids'] );
+    }
+
+    private function get_local_companion_schedule( array $plan, string $event_url ): array {
+        $event_plan = isset( $plan['plans'][ $event_url ] ) && is_array( $plan['plans'][ $event_url ] ) ? $plan['plans'][ $event_url ] : [];
+        $event = isset( $event_plan['event'] ) && is_array( $event_plan['event'] ) ? $event_plan['event'] : [ 'event_url' => $event_url ];
+        $saved_sessions = isset( $event_plan['saved_sessions'] ) && is_array( $event_plan['saved_sessions'] ) ? $event_plan['saved_sessions'] : [];
+        $sessions = [];
+
+        foreach ( $saved_sessions as $session_post ) {
+            if ( ! is_array( $session_post ) ) {
+                continue;
+            }
+
+            $session = $this->saved_session_post_to_session( $session_post );
+            if ( ! empty( $session['id'] ) ) {
+                $sessions[] = $session;
+            }
+        }
+
+        usort(
+            $sessions,
+            function ( array $a, array $b ): int {
+                return ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
+            }
+        );
+
+        return [
+            'event_url'   => $event_url,
+            'event'       => $event,
+            'site_name'   => isset( $event['site_name'] ) ? sanitize_text_field( (string) $event['site_name'] ) : '',
+            'timezone'    => isset( $event['schedule_timezone'] ) && $event['schedule_timezone'] ? sanitize_text_field( (string) $event['schedule_timezone'] ) : ( isset( $event['timezone'] ) ? sanitize_text_field( (string) $event['timezone'] ) : '' ),
+            'days'        => isset( $event['schedule_days'] ) && is_array( $event['schedule_days'] ) ? $event['schedule_days'] : [],
+            'gaps'        => [],
+            'gaps_loaded' => false,
+            'sessions'    => $sessions,
+            'mode'        => 'companion',
+            'local'       => true,
+            'fetched_at'  => time(),
+        ];
+    }
+
+    private function saved_session_post_to_session( array $session_post ): array {
+        return [
+            'id'             => isset( $session_post['session_id'] ) ? absint( $session_post['session_id'] ) : 0,
+            'title'          => isset( $session_post['title'] ) ? sanitize_text_field( (string) $session_post['title'] ) : '',
+            'url'            => isset( $session_post['url'] ) ? esc_url_raw( (string) $session_post['url'] ) : '',
+            'start'          => isset( $session_post['start'] ) ? absint( $session_post['start'] ) : null,
+            'duration'       => isset( $session_post['duration'] ) ? absint( $session_post['duration'] ) : 0,
+            'end'            => isset( $session_post['end'] ) ? absint( $session_post['end'] ) : null,
+            'type'           => isset( $session_post['type'] ) ? sanitize_key( (string) $session_post['type'] ) : '',
+            'speaker_names'  => isset( $session_post['speaker_names'] ) && is_array( $session_post['speaker_names'] ) ? array_map( 'sanitize_text_field', $session_post['speaker_names'] ) : [],
+            'track_names'    => isset( $session_post['track_names'] ) && is_array( $session_post['track_names'] ) ? array_map( 'sanitize_text_field', $session_post['track_names'] ) : [],
+            'category_names' => isset( $session_post['category_names'] ) && is_array( $session_post['category_names'] ) ? array_map( 'sanitize_text_field', $session_post['category_names'] ) : [],
+        ];
     }
 
     private function get_plan_updated_at( array $plan, string $event_url ): int {

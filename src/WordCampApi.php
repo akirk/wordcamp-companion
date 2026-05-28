@@ -504,23 +504,33 @@ class WordCampApi {
             'timezone'    => isset( $event['Event Timezone'] ) ? sanitize_text_field( $event['Event Timezone'] ) : '',
             'country'     => isset( $event['_host_country_name'] ) ? $this->normalize_text( $event['_host_country_name'] ) : '',
             'coordinates' => $event['_host_coordinates'] ?? null,
-            'venue'       => $this->extract_venue_fields( $event ),
+            'venue'       => $this->extract_venue_snapshot( $event ),
         ];
     }
 
-    private function extract_venue_fields( array $event ): array {
+    private function extract_venue_snapshot( array $event ): array {
         return [
-            'name'             => isset( $event['Venue Name'] ) ? $this->normalize_text( $event['Venue Name'] ) : '',
-            'physical_address' => isset( $event['Physical Address'] ) ? $this->normalize_text( $event['Physical Address'] ) : '',
-            'street_name'      => isset( $event['_venue_street_name'] ) ? $this->normalize_text( $event['_venue_street_name'] ) : '',
-            'street_number'    => isset( $event['_venue_street_number'] ) ? $this->normalize_text( $event['_venue_street_number'] ) : '',
-            'city'             => isset( $event['_venue_city'] ) ? $this->normalize_text( $event['_venue_city'] ) : '',
-            'state'            => isset( $event['_venue_state'] ) ? $this->normalize_text( $event['_venue_state'] ) : '',
-            'country_code'     => isset( $event['_venue_country_code'] ) ? sanitize_text_field( $event['_venue_country_code'] ) : '',
-            'country'          => isset( $event['_venue_country_name'] ) ? $this->normalize_text( $event['_venue_country_name'] ) : '',
-            'zip'              => isset( $event['_venue_zip'] ) ? $this->normalize_text( $event['_venue_zip'] ) : '',
-            'coordinates'      => $event['_venue_coordinates'] ?? null,
+            'name'        => isset( $event['Venue Name'] ) ? $this->normalize_text( $event['Venue Name'] ) : '',
+            'address'     => $this->extract_venue_address( $event ),
+            'coordinates' => $event['_venue_coordinates'] ?? null,
         ];
+    }
+
+    private function extract_venue_address( array $event ): string {
+        if ( isset( $event['Physical Address'] ) && is_string( $event['Physical Address'] ) ) {
+            return $this->normalize_text( $event['Physical Address'] );
+        }
+
+        $parts = [
+            isset( $event['_venue_street_number'] ) ? $this->normalize_text( $event['_venue_street_number'] ) : '',
+            isset( $event['_venue_street_name'] ) ? $this->normalize_text( $event['_venue_street_name'] ) : '',
+            isset( $event['_venue_zip'] ) ? $this->normalize_text( $event['_venue_zip'] ) : '',
+            isset( $event['_venue_city'] ) ? $this->normalize_text( $event['_venue_city'] ) : '',
+            isset( $event['_venue_state'] ) ? $this->normalize_text( $event['_venue_state'] ) : '',
+            isset( $event['_venue_country_name'] ) ? $this->normalize_text( $event['_venue_country_name'] ) : '',
+        ];
+
+        return trim( implode( "\n", array_filter( $parts ) ) );
     }
 
     private function normalize_sessions( array $sessions, array $speakers, array $tracks, array $categories ): array {
