@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.40';
+    const SCRIPT_BUILD = '20260528.42';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -19,6 +19,7 @@
         exitingCompanionStepKeys: {},
         savingEvent: false,
         savingSessionId: null,
+        savingCompanionEventUrl: '',
         debugOffsetSeconds: 0,
         debugPlaying: false,
         debugRate: 300,
@@ -53,6 +54,7 @@
         nodes.selectedMeta = document.getElementById('wcc-selected-meta');
         nodes.openEvent = document.getElementById('wcc-open-event');
         nodes.changeEvent = document.getElementById('wcc-change-event');
+        nodes.companionVisibility = document.getElementById('wcc-companion-visibility');
         nodes.picker = document.getElementById('wcc-picker');
         nodes.plannerNav = document.getElementById('wcc-planner-nav');
         nodes.eventSelect = document.getElementById('wcc-event-select');
@@ -159,6 +161,17 @@
                         nodes.eventSelect.focus();
                     }
                 }, 0);
+            });
+        }
+
+        if (nodes.companionVisibility) {
+            nodes.companionVisibility.addEventListener('click', function () {
+                const event = getSelectedEvent();
+                if (!event) {
+                    return;
+                }
+
+                setEventCompanionVisibility(event, !isEventShownInCompanion(event));
             });
         }
 
@@ -282,6 +295,41 @@
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.savingEvent = false;
+            render();
+        }
+    }
+
+    async function setEventCompanionVisibility(event, show) {
+        if (!event || !event.event_url || state.savingCompanionEventUrl) {
+            return;
+        }
+
+        state.savingCompanionEventUrl = event.event_url;
+        state.alert = null;
+        render();
+
+        try {
+            state.plan = normalizePlan(await api('plan/companion-visibility', {
+                method: 'POST',
+                body: {
+                    event: event,
+                    show: Boolean(show),
+                },
+            }));
+
+            if (state.page === 'companion') {
+                state.selectedEventUrl = state.plan.selected_event_url || '';
+                state.schedule = state.selectedEventUrl ? buildLocalCompanionSchedule() : null;
+                state.loadedGapKeys = {};
+                state.openGapKey = '';
+                resetCompanionAnimationState();
+            }
+
+            state.alert = null;
+        } catch (error) {
+            state.alert = { type: 'error', message: error.message };
+        } finally {
+            state.savingCompanionEventUrl = '';
             render();
         }
     }
@@ -725,7 +773,7 @@
     }
 
     function renderSelectedEvent() {
-        if (!nodes.selectedTitle && !nodes.selectedMeta && !nodes.openEvent) {
+        if (!nodes.selectedTitle && !nodes.selectedMeta && !nodes.openEvent && !nodes.companionVisibility) {
             return;
         }
 
@@ -742,6 +790,7 @@
                 nodes.openEvent.href = '#';
                 nodes.openEvent.hidden = true;
             }
+            setHidden(nodes.companionVisibility, true);
             return;
         }
 
@@ -761,6 +810,8 @@
                 nodes.openEvent.hidden = true;
             }
         }
+
+        renderCompanionVisibilityButton(nodes.companionVisibility, event);
     }
 
     function renderControls() {
@@ -815,27 +866,86 @@
         }
 
         events.forEach(function (event) {
-            const button = element('button', {
+            const card = element('article', {
                 className: 'wcc-event-card' + (event.event_url === state.selectedEventUrl ? ' is-active' : ''),
-                type: 'button',
+                role: 'button',
+                tabindex: '0',
             });
-            button.append(
+            const details = element('div', { className: 'wcc-event-card-details' });
+            const actions = element('div', { className: 'wcc-event-card-actions' });
+
+            details.append(
                 element('span', { className: 'wcc-event-title', text: event.title || 'Untitled WordCamp' }),
                 element('span', {
                     className: 'wcc-event-meta',
                     text: [event.location, formatEventRange(event)].filter(Boolean).join(' - '),
                 })
             );
-            button.addEventListener('click', function () {
-                if (state.page === 'plan-selector') {
-                    window.location.href = getPlanYourDayUrl(event);
+            actions.append(createEventCompanionToggle(event));
+            card.append(details, actions);
+
+            card.addEventListener('click', function (clickEvent) {
+                if (clickEvent.target && clickEvent.target.closest && clickEvent.target.closest('button, a, input, select, textarea')) {
                     return;
                 }
 
-                selectEvent(event.event_url);
+                activateEventCard(event);
             });
-            nodes.eventList.append(button);
+            card.addEventListener('keydown', function (keyEvent) {
+                if (keyEvent.target !== card || keyEvent.defaultPrevented) {
+                    return;
+                }
+
+                if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+                    keyEvent.preventDefault();
+                    activateEventCard(event);
+                }
+            });
+            nodes.eventList.append(card);
         });
+    }
+
+    function activateEventCard(event) {
+        if (state.page === 'plan-selector') {
+            window.location.href = getPlanYourDayUrl(event);
+            return;
+        }
+
+        selectEvent(event.event_url);
+    }
+
+    function createEventCompanionToggle(event) {
+        const button = element('button', {
+            className: 'wcc-event-companion-toggle',
+            type: 'button',
+        });
+
+        renderCompanionVisibilityButton(button, event);
+        button.addEventListener('click', function () {
+            setEventCompanionVisibility(event, !isEventShownInCompanion(event));
+        });
+
+        return button;
+    }
+
+    function renderCompanionVisibilityButton(button, event) {
+        if (!button) {
+            return;
+        }
+
+        if (!event || !event.event_url) {
+            setHidden(button, true);
+            return;
+        }
+
+        const isShown = isEventShownInCompanion(event);
+        const isSaving = state.savingCompanionEventUrl === event.event_url;
+
+        setHidden(button, false);
+        button.textContent = isSaving ? 'Saving...' : (isShown ? 'Shown in companion' : 'Show in companion');
+        button.disabled = isSaving;
+        button.setAttribute('aria-pressed', isShown ? 'true' : 'false');
+        button.setAttribute('aria-label', (isShown ? 'Hide from companion: ' : 'Show in companion: ') + getEventTitle(event));
     }
 
     function renderTabs() {
@@ -2636,23 +2746,30 @@
         const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
 
         Object.keys(plans).forEach(function (eventUrl) {
-            const event = plans[eventUrl] && plans[eventUrl].event ? plans[eventUrl].event : null;
+            const plan = plans[eventUrl] && typeof plans[eventUrl] === 'object' ? plans[eventUrl] : null;
+            const event = plan && plan.event ? plan.event : null;
 
-            if (event && event.event_url && !events.some(function (existing) {
+            if (plan && plan.show_in_companion && event && event.event_url && !events.some(function (existing) {
                 return existing.event_url === event.event_url;
             })) {
                 events.push(event);
             }
         });
 
-        if (!events.length) {
-            const selectedEvent = getSelectedEvent();
-            if (selectedEvent && selectedEvent.event_url) {
-                events.push(selectedEvent);
-            }
-        }
-
         return events.sort(compareEvents);
+    }
+
+    function getPlanForEvent(event) {
+        const eventUrl = typeof event === 'string' ? event : event && event.event_url;
+        const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
+
+        return eventUrl && plans[eventUrl] ? plans[eventUrl] : null;
+    }
+
+    function isEventShownInCompanion(event) {
+        const plan = getPlanForEvent(event);
+
+        return Boolean(plan && plan.show_in_companion);
     }
 
     function getEventByUrl(eventUrl) {
@@ -2796,6 +2913,8 @@
                 saved_session_ids: [],
                 saved_sessions: [],
                 updated_at: 0,
+                show_in_companion: false,
+                companion_visibility_set: false,
             };
         }
 
@@ -2840,6 +2959,9 @@
         ids.add(Number(savedPost.session_id));
         selectedPlan.saved_session_ids = Array.from(ids).filter(Boolean);
         selectedPlan.updated_at = Math.floor(Date.now() / 1000);
+        if (!selectedPlan.companion_visibility_set) {
+            selectedPlan.show_in_companion = selectedPlan.saved_session_ids.length > 0;
+        }
         state.plan.saved_session_posts = selectedPlan.saved_sessions;
     }
 
@@ -2854,6 +2976,9 @@
             return savedId && savedId !== id;
         });
         selectedPlan.updated_at = Math.floor(Date.now() / 1000);
+        if (!selectedPlan.companion_visibility_set) {
+            selectedPlan.show_in_companion = selectedPlan.saved_session_ids.length > 0;
+        }
         state.plan.saved_session_posts = selectedPlan.saved_sessions;
     }
 
@@ -3291,11 +3416,23 @@
     }
 
     function normalizePlan(plan) {
+        const rawPlans = plan && plan.plans && typeof plan.plans === 'object' ? plan.plans : {};
+        const plans = {};
+
+        Object.keys(rawPlans).forEach(function (eventUrl) {
+            const eventPlan = rawPlans[eventUrl] && typeof rawPlans[eventUrl] === 'object' ? rawPlans[eventUrl] : {};
+
+            plans[eventUrl] = Object.assign({}, eventPlan, {
+                show_in_companion: Boolean(eventPlan.show_in_companion),
+                companion_visibility_set: Boolean(eventPlan.companion_visibility_set),
+            });
+        });
+
         return {
             selected_event_url: plan && plan.selected_event_url ? plan.selected_event_url : '',
             selected_wordcamp_term_id: plan && plan.selected_wordcamp_term_id ? Number(plan.selected_wordcamp_term_id) : 0,
             saved_session_posts: plan && Array.isArray(plan.saved_session_posts) ? plan.saved_session_posts : [],
-            plans: plan && plan.plans && typeof plan.plans === 'object' ? plan.plans : {},
+            plans: plans,
         };
     }
 

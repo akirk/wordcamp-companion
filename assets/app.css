@@ -319,6 +319,11 @@ a:focus-visible {
     border-color: color-mix(in srgb, var(--wcc-primary), var(--wcc-border) 55%);
 }
 
+.wcc-button[aria-pressed="true"] {
+    border-color: var(--wcc-primary);
+    color: var(--wcc-primary);
+}
+
 .wcc-button:disabled,
 .wcc-session-toggle:disabled {
     cursor: not-allowed;
@@ -407,9 +412,12 @@ a:focus-visible {
 }
 
 .wcc-event-card {
+    display: grid;
+    gap: 10px;
     width: 100%;
     padding: 11px 12px;
     text-align: left;
+    font: inherit;
     color: var(--wcc-text);
     background: var(--wcc-surface);
     border: 1px solid var(--wcc-border);
@@ -418,12 +426,48 @@ a:focus-visible {
 }
 
 .wcc-event-card:hover,
+.wcc-event-card:focus-visible,
 .wcc-event-card.is-active {
     border-color: var(--wcc-primary);
 }
 
+.wcc-event-card:focus-visible {
+    outline: 2px solid var(--wcc-primary);
+    outline-offset: 2px;
+}
+
 .wcc-event-card.is-active {
     box-shadow: inset 3px 0 0 var(--wcc-primary);
+}
+
+.wcc-event-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wcc-event-companion-toggle {
+    min-height: 30px;
+    padding: 5px 9px;
+    color: var(--wcc-text);
+    background: transparent;
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.wcc-event-companion-toggle:hover,
+.wcc-event-companion-toggle:focus-visible,
+.wcc-event-companion-toggle[aria-pressed="true"] {
+    border-color: var(--wcc-primary);
+    color: var(--wcc-primary);
+}
+
+.wcc-event-companion-toggle:focus-visible {
+    outline: 2px solid var(--wcc-primary);
+    outline-offset: 2px;
 }
 
 .wcc-event-title {

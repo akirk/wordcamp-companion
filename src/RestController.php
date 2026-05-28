@@ -128,6 +128,18 @@ class RestController {
             ]
         );
 
+        register_rest_route(
+            self::NAMESPACE,
+            '/plan/companion-visibility',
+            [
+                [
+                    'methods'             => 'POST',
+                    'callback'            => [ $this, 'save_companion_visibility' ],
+                    'permission_callback' => [ $this, 'can_read' ],
+                ],
+            ]
+        );
+
     }
 
     public function can_read(): bool {
@@ -724,6 +736,19 @@ class RestController {
         $params = $this->get_request_params( $request );
         $event = isset( $params['event'] ) && is_array( $params['event'] ) ? $params['event'] : $params;
         $plan = $this->repository->set_selected_event( get_current_user_id(), $event );
+
+        if ( is_wp_error( $plan ) ) {
+            return $plan;
+        }
+
+        return rest_ensure_response( $plan );
+    }
+
+    public function save_companion_visibility( WP_REST_Request $request ) {
+        $params = $this->get_request_params( $request );
+        $event = isset( $params['event'] ) && is_array( $params['event'] ) ? $params['event'] : [];
+        $show = rest_sanitize_boolean( $params['show'] ?? false );
+        $plan = $this->repository->set_companion_visibility( get_current_user_id(), $event, $show );
 
         if ( is_wp_error( $plan ) ) {
             return $plan;

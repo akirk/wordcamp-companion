@@ -12,6 +12,7 @@ class PlannerRepository {
     public const TAXONOMY_REST_BASE = 'wordcamp-companion-wordcamps';
 
     private const SELECTED_TERM_META_KEY = 'wordcamp_companion_selected_wordcamp';
+    private const COMPANION_VISIBILITY_META_KEY = 'wordcamp_companion_wordcamp_visibility';
     private const EVENT_META_KEY = 'wcc_event';
     private const EVENT_URL_META_KEY = 'wcc_event_url';
     private const SCHEDULE_DAYS_META_KEY = 'wcc_schedule_days';
@@ -85,7 +86,15 @@ class PlannerRepository {
             $selected_term_id = 0;
         }
 
-        $term_ids = $this->get_saved_wordcamp_term_ids( $user_id );
+        $visibility_map = $this->get_companion_visibility_map( $user_id );
+        $term_ids = array_values(
+            array_unique(
+                array_merge(
+                    $this->get_saved_wordcamp_term_ids( $user_id ),
+                    $this->get_companion_visibility_term_ids( $visibility_map )
+                )
+            )
+        );
         if ( $selected_term_id && ! in_array( $selected_term_id, $term_ids, true ) ) {
             $term_ids[] = $selected_term_id;
         }
@@ -94,22 +103,29 @@ class PlannerRepository {
             return $this->empty_plan();
         }
 
-        $plans = $this->get_attending_plans( $user_id, $term_ids );
+        $plans = $this->get_attending_plans( $user_id, $term_ids, $visibility_map );
         if ( ! $plans ) {
             return $this->empty_plan();
         }
 
-        $selected_plan = $this->get_next_saved_plan( $plans );
-        if ( ! $selected_plan && $selected_term_id ) {
-            $selected_plan = $this->get_plan_by_term_id( $plans, $selected_term_id );
-        }
+        $selected_plan = $this->get_next_companion_plan( $plans );
         if ( ! $selected_plan ) {
-            $selected_plan = reset( $plans );
+            return [
+                'selected_event_url'       => '',
+                'selected_wordcamp_term_id' => 0,
+                'saved_session_posts'      => [],
+                'plans'                    => $plans,
+            ];
         }
 
         $event_url = $selected_plan['event']['event_url'] ?? '';
         if ( '' === $event_url ) {
-            return $this->empty_plan();
+            return [
+                'selected_event_url'       => '',
+                'selected_wordcamp_term_id' => 0,
+                'saved_session_posts'      => [],
+                'plans'                    => $plans,
+            ];
         }
 
         return [
@@ -137,6 +153,30 @@ class PlannerRepository {
         }
 
         update_user_meta( $user_id, self::SELECTED_TERM_META_KEY, $term_id );
+
+        return $this->get_plan( $user_id );
+    }
+
+    public function set_companion_visibility( int $user_id, array $event, bool $show ) {
+        $event = $this->sanitize_event_snapshot( $event );
+
+        if ( empty( $event['event_url'] ) || ! $this->api->is_allowed_wordcamp_url( $event['event_url'] ) ) {
+            return new WP_Error(
+                'wordcamp_companion_invalid_event',
+                __( 'Choose a valid WordCamp from the event list.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $term_id = $this->ensure_wordcamp_term( $event );
+        if ( is_wp_error( $term_id ) ) {
+            return $term_id;
+        }
+
+        $visibility_map = $this->get_companion_visibility_map( $user_id );
+        $visibility_map[ absint( $term_id ) ] = $show ? 1 : 0;
+
+        update_user_meta( $user_id, self::COMPANION_VISIBILITY_META_KEY, $visibility_map );
 
         return $this->get_plan( $user_id );
     }
@@ -393,7 +433,7 @@ class PlannerRepository {
         return is_array( $decoded ) ? $this->sanitize_schedule_days( $decoded ) : [];
     }
 
-    private function get_attending_plans( int $user_id, array $term_ids ): array {
+    private function get_attending_plans( int $user_id, array $term_ids, array $visibility_map ): array {
         $plans = [];
         foreach ( array_unique( array_map( 'absint', $term_ids ) ) as $term_id ) {
             if ( ! $term_id || ! term_exists( $term_id, self::TAXONOMY ) ) {
@@ -422,35 +462,37 @@ class PlannerRepository {
             }
 
             $plans[ $event['event_url'] ] = [
-                'event'             => $event,
-                'wordcamp_term_id'  => $term_id,
-                'saved_session_ids' => $saved_session_ids,
-                'saved_sessions'    => $saved_sessions,
-                'updated_at'        => $updated_at,
+                'event'                    => $event,
+                'wordcamp_term_id'         => $term_id,
+                'saved_session_ids'        => $saved_session_ids,
+                'saved_sessions'           => $saved_sessions,
+                'updated_at'               => $updated_at,
+                'show_in_companion'        => $this->is_plan_shown_in_companion( $visibility_map, $term_id, $saved_session_ids ),
+                'companion_visibility_set' => array_key_exists( $term_id, $visibility_map ),
             ];
         }
 
         return $plans;
     }
 
-    private function get_next_saved_plan( array $plans ): array {
-        $saved_plans = array_values(
+    private function get_next_companion_plan( array $plans ): array {
+        $visible_plans = array_values(
             array_filter(
                 $plans,
                 function ( array $plan ): bool {
-                    return ! empty( $plan['saved_session_ids'] );
+                    return ! empty( $plan['show_in_companion'] );
                 }
             )
         );
 
-        if ( ! $saved_plans ) {
+        if ( ! $visible_plans ) {
             return [];
         }
 
         $now = time();
         $future_plans = array_values(
             array_filter(
-                $saved_plans,
+                $visible_plans,
                 function ( array $plan ) use ( $now ): bool {
                     return ! empty( $plan['event']['start'] ) && absint( $plan['event']['start'] ) >= $now;
                 }
@@ -462,18 +504,48 @@ class PlannerRepository {
             return $future_plans[0];
         }
 
-        usort( $saved_plans, [ $this, 'compare_plans_by_start_descending' ] );
-        return $saved_plans[0];
+        usort( $visible_plans, [ $this, 'compare_plans_by_start_descending' ] );
+        return $visible_plans[0];
     }
 
-    private function get_plan_by_term_id( array $plans, int $term_id ): array {
-        foreach ( $plans as $plan ) {
-            if ( absint( $plan['wordcamp_term_id'] ?? 0 ) === $term_id ) {
-                return $plan;
-            }
+    private function is_plan_shown_in_companion( array $visibility_map, int $term_id, array $saved_session_ids ): bool {
+        if ( array_key_exists( $term_id, $visibility_map ) ) {
+            return 1 === absint( $visibility_map[ $term_id ] );
         }
 
-        return [];
+        return ! empty( $saved_session_ids );
+    }
+
+    private function get_companion_visibility_map( int $user_id ): array {
+        $raw_map = get_user_meta( $user_id, self::COMPANION_VISIBILITY_META_KEY, true );
+        if ( is_string( $raw_map ) && '' !== $raw_map ) {
+            $decoded = json_decode( $raw_map, true );
+            $raw_map = is_array( $decoded ) ? $decoded : [];
+        }
+
+        if ( ! is_array( $raw_map ) ) {
+            return [];
+        }
+
+        $visibility_map = [];
+        foreach ( $raw_map as $term_id => $show ) {
+            $term_id = absint( $term_id );
+            if ( ! $term_id || ! term_exists( $term_id, self::TAXONOMY ) ) {
+                continue;
+            }
+
+            $visibility_map[ $term_id ] = rest_sanitize_boolean( $show ) ? 1 : 0;
+        }
+
+        return $visibility_map;
+    }
+
+    private function get_companion_visibility_term_ids( array $visibility_map ): array {
+        return array_values(
+            array_filter(
+                array_map( 'absint', array_keys( $visibility_map ) )
+            )
+        );
     }
 
     private function compare_plans_by_start_ascending( array $a, array $b ): int {
