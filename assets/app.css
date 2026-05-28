@@ -167,6 +167,12 @@ a:focus-visible {
     font-weight: 700;
 }
 
+.wcc-heading-with-count {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
 .wcc-plan-heading {
     min-width: 0;
 }
@@ -200,6 +206,10 @@ a:focus-visible {
     min-width: 180px;
     color: var(--wcc-muted);
     text-align: right;
+}
+
+.wcc-plan-summary.wcc-actions {
+    justify-content: flex-end;
 }
 
 .wcc-selected-event,
@@ -378,34 +388,7 @@ a:focus-visible {
 }
 
 .wcc-plan-selector {
-    padding: 18px;
-    background: var(--wcc-surface);
-    border: 1px solid var(--wcc-border);
-    border-radius: 8px;
-}
-
-.wcc-plan-selector-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 16px;
-}
-
-.wcc-plan-selector-title {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.wcc-plan-selector h2,
-.wcc-plan-selector p {
-    margin: 0;
-}
-
-.wcc-plan-selector p {
-    margin-top: 4px;
-    color: var(--wcc-muted);
+    margin-top: 6px;
 }
 
 .wcc-count {
@@ -1224,7 +1207,6 @@ a:focus-visible {
     .wcc-header,
     .wcc-selected-event,
     .wcc-picker,
-    .wcc-plan-selector-header,
     .wcc-planner-nav {
         display: grid;
         grid-template-columns: 1fr;

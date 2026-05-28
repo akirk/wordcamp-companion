@@ -6,7 +6,7 @@ use WP_Error;
 
 class WordCampApi {
     private const CENTRAL_WORDCAMPS_URL = 'https://central.wordcamp.org/wp-json/wp/v2/wordcamps';
-    private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v2';
+    private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v3';
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
