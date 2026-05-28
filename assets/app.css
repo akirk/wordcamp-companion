@@ -438,11 +438,34 @@ a:focus-visible {
 
 .wcc-companion-top {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     min-height: 28px;
 }
 
-.wcc-organize-link {
+.wcc-companion-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--wcc-muted);
+    font-size: 0.86rem;
+    font-weight: 650;
+}
+
+.wcc-companion-switcher select {
+    max-width: min(56vw, 280px);
+    min-height: 30px;
+    padding: 3px 24px 3px 8px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    font-size: 0.86rem;
+}
+
+.wcc-plan-link {
     padding: 0;
     color: var(--wcc-muted);
     background: transparent;
@@ -454,7 +477,7 @@ a:focus-visible {
     text-underline-offset: 3px;
 }
 
-.wcc-organize-link:hover {
+.wcc-plan-link:hover {
     color: var(--wcc-text);
 }
 
@@ -1198,6 +1221,25 @@ a:focus-visible {
 
     .wcc-debug-clock > .wcc-button {
         order: 3;
+    }
+
+    .wcc-companion-top {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .wcc-companion-switcher,
+    .wcc-companion-switcher select {
+        width: 100%;
+    }
+
+    .wcc-companion-switcher {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .wcc-companion-switcher select {
+        max-width: none;
     }
 
     .wcc-session {

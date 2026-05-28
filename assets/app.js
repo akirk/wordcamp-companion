@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.30';
+    const SCRIPT_BUILD = '20260528.31';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -33,8 +33,8 @@
     function init() {
         nodes.app = document.getElementById('wordcamp-companion-app');
         state.page = nodes.app && nodes.app.dataset.page ? nodes.app.dataset.page : 'companion';
-        state.view = state.page === 'organize' ? 'schedule' : 'companion';
-        state.pickerOpen = state.page === 'organize';
+        state.view = state.page === 'plan' ? 'schedule' : 'companion';
+        state.pickerOpen = state.page === 'plan' || state.page === 'plan-selector';
         nodes.debugClock = document.getElementById('wcc-debug-clock');
         nodes.debugCurrent = document.getElementById('wcc-debug-current');
         nodes.debugPlay = document.getElementById('wcc-debug-play');
@@ -124,6 +124,14 @@
 
         if (nodes.eventSelect) {
             nodes.eventSelect.addEventListener('change', function (event) {
+                if (state.page === 'plan-selector') {
+                    const selectedEvent = getEventByUrl(event.target.value);
+                    if (selectedEvent) {
+                        window.location.href = getPlanYourDayUrl(selectedEvent);
+                    }
+                    return;
+                }
+
                 selectEvent(event.target.value);
             });
         }
@@ -164,25 +172,43 @@
     }
 
     async function loadInitialData() {
-        state.loadingEvents = state.page === 'organize';
+        const requestedSlug = getRequestedWordcampSlug();
+        const needsEvents = state.page === 'plan' || state.page === 'companion' || state.page === 'plan-selector';
+
+        state.loadingEvents = needsEvents;
         state.plan = normalizePlan(config.initialPlan);
-        state.selectedEventUrl = state.plan.selected_event_url || '';
-        state.pickerOpen = state.page === 'organize' && !state.selectedEventUrl;
+        state.selectedEventUrl = state.page === 'plan-selector' ? '' : (state.plan.selected_event_url || '');
+        state.pickerOpen = state.page === 'plan-selector' || state.page === 'plan' && !state.selectedEventUrl;
         if (state.page === 'companion' && state.selectedEventUrl) {
             state.schedule = buildLocalCompanionSchedule();
         }
         render();
 
         try {
-            if (state.page === 'organize') {
+            let handledRequestedEvent = false;
+
+            if (needsEvents) {
                 const events = await api('wordcamps');
                 state.events = Array.isArray(events.wordcamps) ? events.wordcamps : [];
             }
 
             state.alert = null;
+
+            if (requestedSlug) {
+                const requestedEvent = getEventBySlug(requestedSlug);
+                if (requestedEvent) {
+                    handledRequestedEvent = requestedEvent.event_url !== state.selectedEventUrl;
+                    if (handledRequestedEvent) {
+                        await selectEvent(requestedEvent.event_url);
+                    }
+                } else {
+                    state.alert = { type: 'error', message: 'WordCamp not found for this link.' };
+                }
+            }
+
             render();
 
-            if (state.selectedEventUrl) {
+            if (state.selectedEventUrl && !handledRequestedEvent) {
                 if (state.page === 'companion') {
                     state.schedule = buildLocalCompanionSchedule();
                     resetCompanionAnimationState();
@@ -663,6 +689,12 @@
         const savedIds = getSavedSessionIds();
         const conflictCount = getConflictCount(savedIds);
 
+        if (state.page === 'plan-selector') {
+            nodes.currentEvent.textContent = 'Choose the next WordCamp you want to plan.';
+            nodes.planSummary.textContent = '';
+            return;
+        }
+
         nodes.currentEvent.textContent = event
             ? [event.location, formatEventRange(event)].filter(Boolean).join(' - ')
             : 'No WordCamp selected';
@@ -769,6 +801,11 @@
                 })
             );
             button.addEventListener('click', function () {
+                if (state.page === 'plan-selector') {
+                    window.location.href = getPlanYourDayUrl(event);
+                    return;
+                }
+
                 selectEvent(event.event_url);
             });
             nodes.eventList.append(button);
@@ -789,12 +826,7 @@
 
         if (!state.selectedEventUrl) {
             const empty = element('div', { className: 'wcc-empty' });
-            empty.append(element('p', { text: 'Select a WordCamp.' }));
-            empty.append(element('a', {
-                className: 'wcc-button',
-                href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
-                text: 'Plan your day',
-            }));
+            empty.append(element('p', { text: state.page === 'plan-selector' ? 'Choose a WordCamp to plan your day.' : 'Select a WordCamp.' }));
             nodes.schedule.append(empty);
             return;
         }
@@ -1112,13 +1144,45 @@
 
     function renderCompanionTopLink() {
         const wrapper = element('div', { className: 'wcc-companion-top' });
-        const organizeButton = element('a', {
-            className: 'wcc-organize-link',
-            href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
+        const selectedEvent = getSelectedEvent();
+        const events = getRenderableEvents();
+        const switcher = element('label', { className: 'wcc-companion-switcher' });
+        const select = element('select', { 'aria-label': 'Switch WordCamp' });
+        const planButton = element('a', {
+            className: 'wcc-plan-link',
+            href: getPlanYourDayUrl(selectedEvent),
             text: 'Plan your day',
         });
+        const addButton = element('a', {
+            className: 'wcc-plan-link',
+            href: getPlanYourDayUrl(null),
+            text: 'Add WordCamp',
+        });
 
-        wrapper.append(organizeButton);
+        switcher.append(element('span', { text: 'WordCamp' }));
+
+        if (!events.length) {
+            select.append(element('option', { value: '', text: state.loadingEvents ? 'Loading...' : 'No WordCamps' }));
+            select.disabled = true;
+        } else {
+            events.forEach(function (event) {
+                select.append(element('option', {
+                    value: event.event_url,
+                    text: event.title || event.location || event.event_url,
+                }));
+            });
+            select.value = state.selectedEventUrl || '';
+            select.disabled = state.loadingEvents || state.savingEvent;
+        }
+
+        select.addEventListener('change', function () {
+            selectEvent(select.value);
+        });
+
+        switcher.append(select);
+        wrapper.append(switcher);
+        wrapper.append(planButton);
+        wrapper.append(addButton);
 
         return wrapper;
     }
@@ -2478,6 +2542,104 @@
         return getRenderableEvents().find(function (event) {
             return event.event_url === eventUrl;
         }) || null;
+    }
+
+    function getEventBySlug(slug) {
+        slug = normalizeRouteSlug(slug);
+        if (!slug) {
+            return null;
+        }
+
+        return getRenderableEvents().find(function (event) {
+            return getEventSlugAliases(event).indexOf(slug) !== -1;
+        }) || null;
+    }
+
+    function getRequestedWordcampSlug() {
+        const querySlug = new URLSearchParams(window.location.search).get('wordcamp') || '';
+
+        return normalizeRouteSlug(config.routeWordcampSlug || querySlug);
+    }
+
+    function getEventSlug(event) {
+        const words = getEventSlugWords(event);
+
+        if (!words.length) {
+            return '';
+        }
+
+        const lastWord = words[words.length - 1];
+        if (words[0] === 'wordcamp' && words.length > 2 && /^\d{4}$/.test(lastWord)) {
+            return words.slice(0, -1).join('') + '-' + lastWord;
+        }
+
+        return words.join('-');
+    }
+
+    function getEventSlugAliases(event) {
+        const words = getEventSlugWords(event);
+        const aliases = [getEventSlug(event)];
+
+        if (words.length) {
+            aliases.push(words.join('-'), words.join(''));
+        }
+
+        getEventUrlSlugAliases(event).forEach(function (alias) {
+            aliases.push(alias);
+        });
+
+        return aliases.map(normalizeRouteSlug).filter(Boolean).filter(function (alias, index, list) {
+            return list.indexOf(alias) === index;
+        });
+    }
+
+    function getEventSlugWords(event) {
+        const source = event && (event.title || event.site_name || event.location || event.event_url) ? (event.title || event.site_name || event.location || event.event_url) : '';
+
+        return normalizeSlugSource(source).split(' ').filter(Boolean);
+    }
+
+    function getEventUrlSlugAliases(event) {
+        if (!event || !event.event_url) {
+            return [];
+        }
+
+        try {
+            const url = new URL(event.event_url, window.location.href);
+            const hostParts = url.hostname.split('.');
+            const wordcampIndex = hostParts.indexOf('wordcamp');
+            const subdomain = wordcampIndex > 0 ? hostParts[wordcampIndex - 1] : '';
+            const year = (url.pathname.match(/\/(\d{4})(?:\/|$)/) || [])[1] || '';
+
+            return [subdomain && year ? subdomain + '-' + year : '', subdomain && year ? 'wordcamp' + subdomain + '-' + year : ''];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function normalizeSlugSource(source) {
+        return String(source || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+    }
+
+    function normalizeRouteSlug(slug) {
+        return normalizeSlugSource(slug).replace(/\s+/g, '-');
+    }
+
+    function getPlanYourDayUrl(event) {
+        const base = config.planUrl || config.planBaseUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/plan-your/') : '/wordcamp-companion/plan-your/');
+        const slug = getEventSlug(event);
+
+        if (!slug) {
+            return base.replace(/\/?$/, '/');
+        }
+
+        return base.replace(/\/?$/, '/') + encodeURIComponent(slug) + '/';
     }
 
     function getSelectedEvent() {

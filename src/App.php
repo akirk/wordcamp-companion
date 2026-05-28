@@ -44,14 +44,15 @@ class App extends BaseApp {
 
     protected function setup_routes(): void {
         $this->app->route( '', 'index.php' );
-        $this->app->route( 'organize', 'organize.php' );
+        $this->app->route( 'plan-your', 'plan-your.php' );
+        $this->app->route( 'plan-your/{wordcamp}', 'plan.php' );
     }
 
     protected function setup_menu(): void {
         $this->app->add_menu_item(
             'wordcamp-companion',
             'WordCamp Companion',
-            home_url( '/' . $this->get_url_path() . '/' )
+            home_url( '/' . $this->get_url_path() . '/plan-your/' )
         );
     }
 
@@ -91,7 +92,9 @@ class App extends BaseApp {
                         'nonce'                   => wp_create_nonce( 'wp_rest' ),
                         'loginUrl'                => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
                         'appUrl'                  => home_url( '/' . $this->get_url_path() . '/' ),
-                        'organizeUrl'             => home_url( '/' . $this->get_url_path() . '/organize/' ),
+                        'planBaseUrl'             => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
+                        'planUrl'                 => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
+                        'routeWordcampSlug'       => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
                         'assetVersion'            => $asset_version,
                         'timeFormat'              => get_option( 'time_format' ),
                         'uses24HourTime'          => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),

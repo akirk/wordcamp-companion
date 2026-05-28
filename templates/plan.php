@@ -9,7 +9,7 @@
 <body>
     <?php wp_app_body_open(); ?>
 
-    <main id="wordcamp-companion-app" class="wcc-app" data-page="organize">
+    <main id="wordcamp-companion-app" class="wcc-app" data-page="plan">
         <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>">
             <div>
                 <span class="wcc-kicker"><?php echo esc_html__( 'Debug Time', 'wordcamp-companion' ); ?></span>
