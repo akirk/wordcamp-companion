@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.24';
+    const SCRIPT_BUILD = '20260528.25';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1305,35 +1305,73 @@
     function renderGapSchedule(candidates, timeZone, gap) {
         const tracks = getTracksForSessions(candidates);
         const grid = element('div', { className: 'wcc-gap-grid' });
+        const boundaries = getGapGridBoundaries(candidates, gap);
         const columns = '64px repeat(' + Math.max(1, tracks.length) + ', minmax(150px, 1fr))';
-        const header = element('div', { className: 'wcc-gap-row wcc-gap-header' });
+        const rows = ['auto'].concat(getGapGridRowSizes(boundaries)).join(' ');
 
-        header.style.gridTemplateColumns = columns;
-        header.append(element('div', { className: 'wcc-gap-time' }));
+        grid.style.gridTemplateColumns = columns;
+        grid.style.gridTemplateRows = rows;
+        grid.append(positionGridItem(element('div', { className: 'wcc-gap-time wcc-gap-header-cell' }), 1, 1));
         tracks.forEach(function (track) {
-            header.append(element('div', { className: 'wcc-gap-track', text: track }));
+            grid.append(positionGridItem(element('div', { className: 'wcc-gap-track', text: track }), tracks.indexOf(track) + 2, 1));
         });
-        grid.append(header);
 
-        groupSessionsByTime(candidates).forEach(function (slot) {
-            const row = element('div', { className: 'wcc-gap-row' });
-            const byTrack = groupSessionsByTrack(slot.sessions);
+        boundaries.slice(0, -1).forEach(function (boundary, index) {
+            grid.append(positionGridItem(element('div', { className: 'wcc-gap-time', text: formatSlotTime(boundary, timeZone) }), 1, index + 2));
+        });
 
-            row.style.gridTemplateColumns = columns;
-            row.append(element('div', { className: 'wcc-gap-time', text: formatSlotTime(slot.start, timeZone) }));
+        candidates.slice().sort(compareSessions).forEach(function (session) {
+            const track = getPrimaryTrack(session) || 'Sessions';
+            const trackIndex = Math.max(0, tracks.indexOf(track));
+            const startIndex = Math.max(0, boundaries.indexOf(Number(session.start || 0)));
+            const endIndex = Math.max(startIndex + 1, boundaries.indexOf(Number(session.end || session.start || 0)));
+            const candidate = renderGapCandidate(session, timeZone, gap);
 
-            tracks.forEach(function (track) {
-                const cell = element('div', { className: 'wcc-gap-cell' });
-                (byTrack[track] || []).forEach(function (session) {
-                    cell.append(renderGapCandidate(session, timeZone, gap));
-                });
-                row.append(cell);
-            });
-
-            grid.append(row);
+            candidate.style.gridColumn = String(trackIndex + 2);
+            candidate.style.gridRow = (startIndex + 2) + ' / ' + (endIndex + 2);
+            grid.append(candidate);
         });
 
         return grid;
+    }
+
+    function positionGridItem(node, column, row) {
+        node.style.gridColumn = String(column);
+        node.style.gridRow = String(row);
+
+        return node;
+    }
+
+    function getGapGridBoundaries(candidates, gap) {
+        const boundaries = [];
+
+        function addBoundary(value) {
+            value = Number(value || 0);
+            if (value && boundaries.indexOf(value) === -1) {
+                boundaries.push(value);
+            }
+        }
+
+        addBoundary(gap && gap.start);
+        addBoundary(gap && gap.end);
+        candidates.forEach(function (session) {
+            addBoundary(session.start);
+            addBoundary(session.end || session.start);
+        });
+
+        return boundaries.sort(function (a, b) {
+            return a - b;
+        });
+    }
+
+    function getGapGridRowSizes(boundaries) {
+        return boundaries.slice(0, -1).map(function (boundary, index) {
+            const nextBoundary = boundaries[index + 1] || boundary;
+            const minutes = Math.max(1, Math.round((nextBoundary - boundary) / 60));
+            const height = Math.max(30, Math.min(90, Math.round(minutes * 1.6)));
+
+            return 'minmax(' + height + 'px, auto)';
+        });
     }
 
     function renderGapCandidate(session, timeZone, gap) {
@@ -1586,6 +1624,18 @@
 
             if (!daySessions.length) {
                 if (savedSessions.length && dayStartFromSchedule && dayEndFromSchedule) {
+                    steps.push({
+                        type: 'arrival',
+                        dayKey: group.key,
+                        start: dayStartFromSchedule,
+                        end: Math.min(dayEndFromSchedule, dayStartFromSchedule + 30 * 60),
+                        dayStart: dayStartFromSchedule,
+                        title: dayIndex === 0 ? 'Arrive at ' + getEventTitle(event) : 'Arrive for Day ' + dayNumber,
+                        detail: getEventAddress(event),
+                        meta: group.label,
+                        mapLinks: getEventMapLinks(event),
+                    });
+
                     getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
                         steps.push({
                             type: 'gap',
@@ -1628,7 +1678,7 @@
                 start: arrivalStart,
                 end: firstTrackStart,
                 dayStart: dayStart,
-                title: dayIndex === 0 ? 'Arrive at ' + getEventTitle(event) : 'Arrive for Day ' + (dayIndex + 1),
+                title: dayIndex === 0 ? 'Arrive at ' + getEventTitle(event) : 'Arrive for Day ' + dayNumber,
                 detail: getEventAddress(event),
                 meta: group.label,
                 mapLinks: getEventMapLinks(event),
