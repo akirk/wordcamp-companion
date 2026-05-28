@@ -180,7 +180,12 @@ class RestController {
 
         $plan = $this->repository->get_plan( get_current_user_id() );
         $saved_session_ids = $this->get_saved_session_ids( $plan, $event_url );
-        $schedule = $this->api->get_companion_schedule( $event_url, $saved_session_ids, (bool) $request->get_param( 'refresh' ) );
+        $schedule = $this->api->get_companion_schedule(
+            $event_url,
+            $saved_session_ids,
+            (bool) $request->get_param( 'refresh' ),
+            $this->get_plan_updated_at( $plan, $event_url )
+        );
 
         if ( is_wp_error( $schedule ) ) {
             return $schedule;
@@ -237,6 +242,10 @@ class RestController {
         }
 
         return array_map( 'absint', $plan['plans'][ $event_url ]['saved_session_ids'] );
+    }
+
+    private function get_plan_updated_at( array $plan, string $event_url ): int {
+        return isset( $plan['plans'][ $event_url ]['updated_at'] ) ? absint( $plan['plans'][ $event_url ]['updated_at'] ) : 0;
     }
 
     private function get_compact_companion_schedule( array $schedule, array $saved_session_ids ): array {
@@ -352,7 +361,7 @@ class RestController {
 
             for ( $index = 0; $index < count( $saved_sessions ) - 1; $index++ ) {
                 $gap_start = ! empty( $saved_sessions[ $index ]['end'] ) ? (int) $saved_sessions[ $index ]['end'] : (int) $saved_sessions[ $index ]['start'];
-                $gap_end = (int) $saved_sessions[ $index + 1 ]['start'];
+                $gap_end = max( $gap_start, (int) $saved_sessions[ $index + 1 ]['start'] - 10 * MINUTE_IN_SECONDS );
 
                 if ( $gap_end - $gap_start < 15 * MINUTE_IN_SECONDS ) {
                     continue;

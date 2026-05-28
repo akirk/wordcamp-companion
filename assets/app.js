@@ -11,6 +11,8 @@
         loadingSchedule: false,
         loadingGapKey: '',
         openGapKey: '',
+        companionVisibleStepKeys: null,
+        exitingCompanionStepKeys: {},
         savingEvent: false,
         savingSessionId: null,
         debugOffsetSeconds: 0,
@@ -22,6 +24,7 @@
 
     const nodes = {};
     let clockTimer = null;
+    let companionExitTimer = null;
 
     function init() {
         nodes.app = document.getElementById('wordcamp-companion-app');
@@ -188,6 +191,7 @@
 
         state.selectedEventUrl = eventUrl;
         state.schedule = null;
+        resetCompanionAnimationState();
         state.savingEvent = true;
         state.alert = null;
         render();
@@ -228,6 +232,7 @@
             });
             state.loadingGapKey = '';
             state.openGapKey = '';
+            resetCompanionAnimationState();
         } catch (error) {
             state.schedule = null;
             state.alert = { type: 'error', message: error.message };
@@ -289,7 +294,7 @@
             }));
             state.alert = null;
             if (state.view === 'companion' || state.schedule && state.schedule.mode === 'companion') {
-                await loadSchedule(false, 'companion');
+                await loadSchedule(true, 'companion');
             }
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
@@ -698,9 +703,7 @@
     function renderCompanion() {
         const timeline = buildCompanionTimeline();
         const now = getNow();
-        const visibleSteps = timeline.steps.filter(function (step) {
-            return !isCompanionStepPast(step, now);
-        });
+        const visibleSteps = getAnimatedCompanionSteps(timeline.steps, now);
 
         if (!timeline.hasSavedSessions && timeline.steps.length) {
             const notice = element('div', { className: 'wcc-companion-note', text: 'No saved sessions.' });
@@ -717,6 +720,7 @@
 
         const wrapper = element('div', { className: 'wcc-companion' });
         wrapper.append(renderCompanionTopLink());
+
         visibleSteps.slice(0, 4).forEach(function (step, index) {
             wrapper.append(renderCompanionStep(step, now, index));
         });
@@ -724,15 +728,92 @@
         nodes.schedule.append(wrapper);
     }
 
+    function getAnimatedCompanionSteps(steps, now) {
+        const visibleSteps = steps.filter(function (step) {
+            return !isCompanionStepPast(step, now);
+        });
+        const visibleKeys = visibleSteps.map(getCompanionStepKey);
+        const visibleLookup = new Set(visibleKeys);
+        const stepsByKey = steps.reduce(function (map, step) {
+            map[getCompanionStepKey(step)] = step;
+            return map;
+        }, {});
+        const previousKeys = Array.isArray(state.companionVisibleStepKeys) ? state.companionVisibleStepKeys : null;
+        const currentTime = Date.now();
+
+        if (previousKeys) {
+            previousKeys.forEach(function (key) {
+                const step = stepsByKey[key];
+
+                if (step && !visibleLookup.has(key) && isCompanionStepPast(step, now)) {
+                    state.exitingCompanionStepKeys[key] = currentTime;
+                }
+            });
+        }
+
+        state.companionVisibleStepKeys = visibleKeys;
+
+        const exitingSteps = [];
+        Object.keys(state.exitingCompanionStepKeys).forEach(function (key) {
+            const startedAt = state.exitingCompanionStepKeys[key];
+            const step = stepsByKey[key];
+
+            if (!step || visibleLookup.has(key) || currentTime - startedAt > 650) {
+                delete state.exitingCompanionStepKeys[key];
+                return;
+            }
+
+            exitingSteps.push(Object.assign({}, step, { exiting: true }));
+        });
+
+        if (exitingSteps.length) {
+            scheduleCompanionExitCleanup();
+        }
+
+        return exitingSteps.concat(visibleSteps);
+    }
+
+    function scheduleCompanionExitCleanup() {
+        if (companionExitTimer) {
+            return;
+        }
+
+        companionExitTimer = window.setTimeout(function () {
+            companionExitTimer = null;
+            render();
+        }, 700);
+    }
+
+    function resetCompanionAnimationState() {
+        state.companionVisibleStepKeys = null;
+        state.exitingCompanionStepKeys = {};
+
+        if (companionExitTimer) {
+            window.clearTimeout(companionExitTimer);
+            companionExitTimer = null;
+        }
+    }
+
+    function getCompanionStepKey(step) {
+        return [
+            step.type || '',
+            step.dayKey || '',
+            step.session && step.session.id ? step.session.id : '',
+            step.start || 0,
+            step.end || 0,
+            step.title || '',
+        ].join(':');
+    }
+
     function renderCompanionTopLink() {
         const wrapper = element('div', { className: 'wcc-companion-top' });
-        const button = element('button', {
+        const organizeButton = element('button', {
             className: 'wcc-organize-link',
             type: 'button',
             text: 'Organize',
         });
 
-        button.addEventListener('click', function () {
+        organizeButton.addEventListener('click', function () {
             state.view = 'schedule';
             state.pickerOpen = false;
             render();
@@ -742,7 +823,7 @@
             }
         });
 
-        wrapper.append(button);
+        wrapper.append(organizeButton);
 
         return wrapper;
     }
@@ -755,6 +836,7 @@
                 'is-' + step.type,
                 index === 0 ? 'is-primary' : '',
                 isCurrent ? 'is-current' : '',
+                step.exiting ? 'is-exiting' : '',
                 index === 0 && !isCurrent ? 'is-next' : '',
             ].filter(Boolean).join(' '),
         });
@@ -819,7 +901,6 @@
         const gapKey = getGapKey(step);
         const details = element('details', { className: 'wcc-gap-picker' });
         const timeZone = getSelectedTimezone();
-        const groups = groupGapCandidatesByTrack(candidates);
 
         if (state.openGapKey === gapKey) {
             details.open = true;
@@ -846,40 +927,7 @@
             return details;
         }
 
-        const columns = element('div', { className: 'wcc-gap-columns' });
-
-        groups.forEach(function (group) {
-            const column = element('section', { className: 'wcc-gap-column' });
-            column.append(element('h4', { text: group.track }));
-
-            group.sessions.forEach(function (session) {
-                const button = element('button', {
-                    className: 'wcc-gap-candidate',
-                    type: 'button',
-                });
-                const meta = [formatSessionTime(session, timeZone)];
-
-                if (session.speaker_names && session.speaker_names.length) {
-                    meta.push(session.speaker_names.join(', '));
-                }
-
-                button.append(
-                    element('strong', {
-                        text: state.savingSessionId === session.id ? 'Saving...' : (session.title || 'Untitled session'),
-                    }),
-                    element('span', { text: meta.join(' / ') })
-                );
-                button.disabled = state.savingSessionId !== null;
-                button.addEventListener('click', function () {
-                    toggleSession(session.id);
-                });
-                column.append(button);
-            });
-
-            columns.append(column);
-        });
-
-        details.append(columns);
+        details.append(renderGapSchedule(candidates, timeZone));
 
         return details;
     }
@@ -888,25 +936,63 @@
         return [step.dayKey || '', step.start || 0, step.end || 0].join(':');
     }
 
-    function groupGapCandidatesByTrack(candidates) {
-        const groups = new Map();
+    function renderGapSchedule(candidates, timeZone) {
+        const tracks = getTracksForSessions(candidates);
+        const grid = element('div', { className: 'wcc-gap-grid' });
+        const columns = '64px repeat(' + Math.max(1, tracks.length) + ', minmax(150px, 1fr))';
+        const header = element('div', { className: 'wcc-gap-row wcc-gap-header' });
 
-        candidates.slice().sort(compareSessions).forEach(function (session) {
-            const track = getPrimaryTrack(session) || 'Sessions';
+        header.style.gridTemplateColumns = columns;
+        header.append(element('div', { className: 'wcc-gap-time' }));
+        tracks.forEach(function (track) {
+            header.append(element('div', { className: 'wcc-gap-track', text: track }));
+        });
+        grid.append(header);
 
-            if (!groups.has(track)) {
-                groups.set(track, []);
-            }
+        groupSessionsByTime(candidates).forEach(function (slot) {
+            const row = element('div', { className: 'wcc-gap-row' });
+            const byTrack = groupSessionsByTrack(slot.sessions);
 
-            groups.get(track).push(session);
+            row.style.gridTemplateColumns = columns;
+            row.append(element('div', { className: 'wcc-gap-time', text: formatSlotTime(slot.start, timeZone) }));
+
+            tracks.forEach(function (track) {
+                const cell = element('div', { className: 'wcc-gap-cell' });
+                (byTrack[track] || []).forEach(function (session) {
+                    cell.append(renderGapCandidate(session, timeZone));
+                });
+                row.append(cell);
+            });
+
+            grid.append(row);
         });
 
-        return Array.from(groups.entries()).map(function (entry) {
-            return {
-                track: entry[0],
-                sessions: entry[1],
-            };
+        return grid;
+    }
+
+    function renderGapCandidate(session, timeZone) {
+        const button = element('button', {
+            className: 'wcc-gap-candidate',
+            type: 'button',
         });
+        const meta = [formatSessionTime(session, timeZone)];
+
+        if (session.speaker_names && session.speaker_names.length) {
+            meta.push(session.speaker_names.join(', '));
+        }
+
+        button.append(
+            element('strong', {
+                text: state.savingSessionId === session.id ? 'Saving...' : (session.title || 'Untitled session'),
+            }),
+            element('span', { text: meta.join(' / ') })
+        );
+        button.disabled = state.savingSessionId !== null;
+        button.addEventListener('click', function () {
+            toggleSession(session.id);
+        });
+
+        return button;
     }
 
     function getCompanionStepLabel(step, now, index, timeLabel) {
@@ -1671,7 +1757,7 @@
             const current = savedSessions[index];
             const next = savedSessions[index + 1];
             const gapStart = current.end || current.start;
-            const gapEnd = next.start;
+            const gapEnd = Math.max(gapStart, next.start - 10 * 60);
 
             if (gapEnd - gapStart >= 15 * 60) {
                 gaps.push({

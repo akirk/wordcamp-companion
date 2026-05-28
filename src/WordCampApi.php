@@ -154,9 +154,10 @@ class WordCampApi {
         return $payload;
     }
 
-    public function get_companion_schedule( string $event_url, array $session_ids = [], bool $force_refresh = false ) {
+    public function get_companion_schedule( string $event_url, array $session_ids = [], bool $force_refresh = false, int $cache_version = 0 ) {
         $event_url = $this->normalize_event_site_url( $event_url );
         $session_ids = array_values( array_unique( array_filter( array_map( 'absint', $session_ids ) ) ) );
+        sort( $session_ids );
 
         if ( '' === $event_url || ! $this->is_allowed_wordcamp_url( $event_url ) ) {
             return new WP_Error(
@@ -166,7 +167,7 @@ class WordCampApi {
             );
         }
 
-        $cache_key = 'wordcamp_companion_schedule_companion_' . md5( $event_url . ':' . implode( ',', $session_ids ) );
+        $cache_key = 'wordcamp_companion_schedule_companion_' . md5( $event_url . ':' . implode( ',', $session_ids ) . ':' . absint( $cache_version ) );
         if ( ! $force_refresh ) {
             $cached = get_transient( $cache_key );
             if ( false !== $cached ) {

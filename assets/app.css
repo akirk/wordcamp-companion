@@ -488,6 +488,29 @@ a:focus-visible {
     border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 45%);
 }
 
+.wcc-companion-step.is-exiting {
+    pointer-events: none;
+    overflow: hidden;
+    animation: wcc-companion-step-exit 560ms ease forwards;
+}
+
+@keyframes wcc-companion-step-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 260px;
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        margin-top: -10px;
+    }
+}
+
 .wcc-companion-marker {
     width: 14px;
     height: 14px;
@@ -679,24 +702,37 @@ a:focus-visible {
     font-size: 0.88rem;
 }
 
-.wcc-gap-columns {
+.wcc-gap-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.wcc-gap-column {
-    display: grid;
-    align-content: start;
     gap: 6px;
+    min-width: 520px;
+    margin-top: 8px;
+    overflow-x: auto;
 }
 
-.wcc-gap-column h4 {
-    margin: 0;
+.wcc-gap-row {
+    display: grid;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.wcc-gap-track,
+.wcc-gap-time {
     color: var(--wcc-muted);
     font-size: 0.78rem;
     font-weight: 750;
+}
+
+.wcc-gap-time {
+    padding-top: 8px;
+    font-variant-numeric: tabular-nums;
+}
+
+.wcc-gap-cell {
+    display: grid;
+    align-content: stretch;
+    gap: 6px;
+    min-width: 0;
 }
 
 .wcc-gap-candidate {
@@ -985,10 +1021,43 @@ a:focus-visible {
 
     .wcc-debug-clock {
         align-items: center;
+        flex-wrap: wrap;
+        overflow-x: visible;
     }
 
-    .wcc-debug-clock > div {
-        min-width: max-content;
+    .wcc-debug-clock > div:first-child {
+        flex: 1 1 min(240px, calc(100% - 72px));
+        min-width: 0;
+        order: 1;
+    }
+
+    .wcc-debug-clock > div:first-child strong {
+        white-space: normal;
+    }
+
+    .wcc-debug-play {
+        order: 1;
+    }
+
+    .wcc-debug-rate {
+        flex: 1 0 100%;
+        order: 2;
+    }
+
+    .wcc-debug-rate input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .wcc-debug-jumps {
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        order: 3;
+        white-space: normal;
+    }
+
+    .wcc-debug-clock > .wcc-button {
+        order: 3;
     }
 
     .wcc-session {
