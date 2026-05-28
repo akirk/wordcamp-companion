@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.4';
+    const SCRIPT_BUILD = '20260528.5';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -750,16 +750,18 @@
             return visibleSteps.slice(0, limit);
         }
 
-        let tailIndex = sessionIndex + 1;
-        while (visibleSteps[tailIndex] && ['gap', 'day-end'].indexOf(visibleSteps[tailIndex].type) !== -1) {
-            tailIndex++;
-
-            if (visibleSteps[tailIndex - 1].type === 'day-end') {
-                break;
+        for (let index = sessionIndex + 1; index < visibleSteps.length; index++) {
+            if (visibleSteps[index].type === 'day-end' && visibleSteps[index].final) {
+                return visibleSteps.slice(0, index + 1);
             }
         }
 
-        limit = Math.max(limit, tailIndex);
+        for (let index = sessionIndex + 1; index < visibleSteps.length; index++) {
+            if (visibleSteps[index].type === 'day-end') {
+                limit = Math.max(limit, index + 1);
+                break;
+            }
+        }
 
         return visibleSteps.slice(0, limit);
     }
@@ -1099,7 +1101,7 @@
             const scheduleDayIndex = scheduleDayKeys.indexOf(group.key);
             const dayNumber = scheduleDayIndex >= 0 ? scheduleDayIndex + 1 : dayIndex + 1;
             const dayStartFromSchedule = getDayStart(group.key);
-            const dayEndFromSchedule = getDayEnd(group.key);
+            const dayEndFromSchedule = getKnownDayEnd(group.key, daySessions);
 
             if (!daySessions.length) {
                 if (savedSessions.length && dayStartFromSchedule && dayEndFromSchedule) {
@@ -1128,6 +1130,7 @@
                         title: isFinalEmptyDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
                         detail: isFinalEmptyDay ? 'WordCamp complete.' : 'See you tomorrow.',
                         meta: group.label,
+                        final: isFinalEmptyDay,
                     });
                 }
 
@@ -1219,6 +1222,7 @@
                     title: isFinalDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
                     detail: isFinalDay ? 'WordCamp complete.' : 'See you tomorrow.',
                     meta: group.label,
+                    final: isFinalDay,
                 });
             }
         });
@@ -1809,6 +1813,20 @@
         }
 
         return Number(state.schedule.days[dayKey].end || 0) || null;
+    }
+
+    function getKnownDayEnd(dayKey, sessions) {
+        let dayEnd = getDayEnd(dayKey) || 0;
+
+        (sessions || []).forEach(function (session) {
+            dayEnd = Math.max(dayEnd, Number(session.end || session.start || 0));
+        });
+
+        getGapsForDay(dayKey).forEach(function (gap) {
+            dayEnd = Math.max(dayEnd, Number(gap.end || gap.start || 0));
+        });
+
+        return dayEnd || null;
     }
 
     function getScheduleDayKeys() {
