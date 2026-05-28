@@ -42,7 +42,8 @@ class App extends BaseApp {
     }
 
     protected function setup_routes(): void {
-        $this->app->route( '' );
+        $this->app->route( '', 'index.php' );
+        $this->app->route( 'organize', 'organize.php' );
     }
 
     protected function setup_menu(): void {
@@ -87,6 +88,7 @@ class App extends BaseApp {
                         'nonce'          => wp_create_nonce( 'wp_rest' ),
                         'loginUrl'       => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
                         'appUrl'         => home_url( '/' . $this->get_url_path() . '/' ),
+                        'organizeUrl'    => home_url( '/' . $this->get_url_path() . '/organize/' ),
                         'assetVersion'   => $asset_version,
                         'timeFormat'     => get_option( 'time_format' ),
                         'uses24HourTime' => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),

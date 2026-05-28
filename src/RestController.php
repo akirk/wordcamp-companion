@@ -191,7 +191,13 @@ class RestController {
             return $schedule;
         }
 
-        return rest_ensure_response( $this->get_compact_companion_schedule( $schedule, $saved_session_ids ) );
+        return rest_ensure_response(
+            $this->get_compact_companion_schedule(
+                $schedule,
+                $saved_session_ids,
+                $this->get_companion_event( $plan, $event_url, (bool) $request->get_param( 'refresh' ) )
+            )
+        );
     }
 
     public function get_gap_candidates( WP_REST_Request $request ) {
@@ -248,7 +254,7 @@ class RestController {
         return isset( $plan['plans'][ $event_url ]['updated_at'] ) ? absint( $plan['plans'][ $event_url ]['updated_at'] ) : 0;
     }
 
-    private function get_compact_companion_schedule( array $schedule, array $saved_session_ids ): array {
+    private function get_compact_companion_schedule( array $schedule, array $saved_session_ids, array $event = [] ): array {
         $sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [];
         $saved_session_ids = array_values( array_unique( array_filter( array_map( 'absint', $saved_session_ids ) ) ) );
         $saved_lookup = array_fill_keys( $saved_session_ids, true );
@@ -313,6 +319,7 @@ class RestController {
 
         return [
             'event_url'  => $schedule['event_url'] ?? '',
+            'event'      => $event,
             'site_name'  => $schedule['site_name'] ?? '',
             'timezone'   => $schedule['timezone'] ?? '',
             'days'       => isset( $schedule['days'] ) && is_array( $schedule['days'] ) ? $schedule['days'] : $this->compact_days( $first_sessions_by_day, $last_sessions_by_day ),
@@ -322,6 +329,19 @@ class RestController {
             'mode'       => 'companion',
             'fetched_at' => $schedule['fetched_at'] ?? time(),
         ];
+    }
+
+    private function get_companion_event( array $plan, string $event_url, bool $force_refresh ): array {
+        $event = isset( $plan['plans'][ $event_url ]['event'] ) && is_array( $plan['plans'][ $event_url ]['event'] )
+            ? $plan['plans'][ $event_url ]['event']
+            : [];
+        $central_event = $this->api->get_wordcamp_by_event_url( $event_url, $force_refresh );
+
+        if ( is_array( $central_event ) && $central_event ) {
+            return array_replace_recursive( $event, $central_event );
+        }
+
+        return $event;
     }
 
     private function get_gap_candidates_for_saved_sessions( array $schedule, array $saved_session_ids ): array {

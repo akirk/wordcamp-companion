@@ -1,11 +1,12 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.6';
+    const SCRIPT_BUILD = '20260528.8';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
         plan: { selected_event_url: '', plans: {} },
         schedule: null,
         selectedEventUrl: '',
+        page: 'companion',
         view: 'companion',
         pickerOpen: true,
         loadingEvents: false,
@@ -29,6 +30,9 @@
 
     function init() {
         nodes.app = document.getElementById('wordcamp-companion-app');
+        state.page = nodes.app && nodes.app.dataset.page ? nodes.app.dataset.page : 'companion';
+        state.view = state.page === 'organize' ? 'schedule' : 'companion';
+        state.pickerOpen = state.page === 'organize';
         nodes.debugClock = document.getElementById('wcc-debug-clock');
         nodes.debugCurrent = document.getElementById('wcc-debug-current');
         nodes.debugPlay = document.getElementById('wcc-debug-play');
@@ -69,26 +73,32 @@
     }
 
     function bindEvents() {
-        nodes.debugReset.addEventListener('click', function () {
-            state.debugOffsetSeconds = 0;
-            state.debugPlaying = false;
-            state.debugLastTick = null;
-            render();
-            restartClock();
-        });
+        if (nodes.debugReset) {
+            nodes.debugReset.addEventListener('click', function () {
+                state.debugOffsetSeconds = 0;
+                state.debugPlaying = false;
+                state.debugLastTick = null;
+                render();
+                restartClock();
+            });
+        }
 
-        nodes.debugPlay.addEventListener('click', function () {
-            state.debugPlaying = !state.debugPlaying;
-            state.debugLastTick = Date.now();
-            render();
-            restartClock();
-        });
+        if (nodes.debugPlay) {
+            nodes.debugPlay.addEventListener('click', function () {
+                state.debugPlaying = !state.debugPlaying;
+                state.debugLastTick = Date.now();
+                render();
+                restartClock();
+            });
+        }
 
-        nodes.debugRate.addEventListener('input', function () {
-            state.debugRate = Number(nodes.debugRate.value || 1);
-            render();
-            restartClock();
-        });
+        if (nodes.debugRate) {
+            nodes.debugRate.addEventListener('input', function () {
+                state.debugRate = Number(nodes.debugRate.value || 1);
+                render();
+                restartClock();
+            });
+        }
 
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden && state.view === 'companion') {
@@ -104,29 +114,41 @@
             });
         });
 
-        nodes.debugStart.addEventListener('click', function () {
-            setDebugTimeToWordCampStart();
-        });
+        if (nodes.debugStart) {
+            nodes.debugStart.addEventListener('click', function () {
+                setDebugTimeToWordCampStart();
+            });
+        }
 
-        nodes.eventSelect.addEventListener('change', function (event) {
-            selectEvent(event.target.value);
-        });
+        if (nodes.eventSelect) {
+            nodes.eventSelect.addEventListener('change', function (event) {
+                selectEvent(event.target.value);
+            });
+        }
 
-        nodes.refreshEvents.addEventListener('click', function () {
-            loadEvents(true);
-        });
+        if (nodes.refreshEvents) {
+            nodes.refreshEvents.addEventListener('click', function () {
+                loadEvents(true);
+            });
+        }
 
-        nodes.refreshSchedule.addEventListener('click', function () {
-            loadSchedule(true, state.view === 'schedule' ? 'full' : 'companion');
-        });
+        if (nodes.refreshSchedule) {
+            nodes.refreshSchedule.addEventListener('click', function () {
+                loadSchedule(true, state.view === 'schedule' ? 'full' : 'companion');
+            });
+        }
 
-        nodes.changeEvent.addEventListener('click', function () {
-            state.pickerOpen = true;
-            render();
-            window.setTimeout(function () {
-                nodes.eventSelect.focus();
-            }, 0);
-        });
+        if (nodes.changeEvent) {
+            nodes.changeEvent.addEventListener('click', function () {
+                state.pickerOpen = true;
+                render();
+                window.setTimeout(function () {
+                    if (nodes.eventSelect) {
+                        nodes.eventSelect.focus();
+                    }
+                }, 0);
+            });
+        }
 
         nodes.tabs.forEach(function (tab) {
             tab.addEventListener('click', function () {
@@ -140,20 +162,25 @@
     }
 
     async function loadInitialData() {
-        state.loadingEvents = true;
+        state.loadingEvents = state.page === 'organize';
         render();
 
         try {
-            const results = await Promise.all([api('plan'), api('wordcamps')]);
-            state.plan = normalizePlan(results[0]);
-            state.events = Array.isArray(results[1].wordcamps) ? results[1].wordcamps : [];
+            const plan = await api('plan');
+            state.plan = normalizePlan(plan);
             state.selectedEventUrl = state.plan.selected_event_url || '';
-            state.pickerOpen = !state.selectedEventUrl;
+            state.pickerOpen = state.page === 'organize' && !state.selectedEventUrl;
+
+            if (state.page === 'organize') {
+                const events = await api('wordcamps');
+                state.events = Array.isArray(events.wordcamps) ? events.wordcamps : [];
+            }
+
             state.alert = null;
             render();
 
             if (state.selectedEventUrl) {
-                await loadSchedule(false, 'companion');
+                await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
             }
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
@@ -208,7 +235,7 @@
                 body: { event: event },
             }));
             state.pickerOpen = false;
-            await loadSchedule(false, 'companion');
+            await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
         } finally {
@@ -368,6 +395,10 @@
     }
 
     function renderDebugClock() {
+        if (!nodes.debugCurrent || !nodes.debugPlay || !nodes.debugRateLabel) {
+            return;
+        }
+
         const timeZone = getSelectedTimezone();
         const now = getNow();
         const parts = [];
@@ -391,20 +422,30 @@
     function renderLayout() {
         const hasSelectedEvent = Boolean(state.selectedEventUrl && getSelectedEvent());
         const isChoosing = state.pickerOpen || !hasSelectedEvent;
-        const isFocused = hasSelectedEvent && !isChoosing;
-        const isLiveCompanion = isFocused && state.view === 'companion';
+        const isFocused = state.page === 'companion' || hasSelectedEvent && !isChoosing;
+        const isLiveCompanion = state.page === 'companion' || isFocused && state.view === 'companion';
 
         nodes.app.classList.toggle('is-focused', isFocused);
         nodes.app.classList.toggle('is-choosing', isChoosing);
         nodes.app.classList.toggle('is-live-companion', isLiveCompanion);
-        nodes.header.hidden = isLiveCompanion;
-        nodes.selectedEvent.hidden = !hasSelectedEvent || isLiveCompanion;
-        nodes.picker.hidden = !isChoosing;
-        nodes.plannerNav.hidden = !hasSelectedEvent || isLiveCompanion;
-        nodes.sidebar.hidden = hasSelectedEvent && !isChoosing;
+        setHidden(nodes.header, isLiveCompanion);
+        setHidden(nodes.selectedEvent, !hasSelectedEvent || isLiveCompanion);
+        setHidden(nodes.picker, !isChoosing);
+        setHidden(nodes.plannerNav, !hasSelectedEvent || isLiveCompanion);
+        setHidden(nodes.sidebar, hasSelectedEvent && !isChoosing);
+    }
+
+    function setHidden(node, hidden) {
+        if (node) {
+            node.hidden = hidden;
+        }
     }
 
     function renderAlerts() {
+        if (!nodes.alerts) {
+            return;
+        }
+
         nodes.alerts.replaceChildren();
 
         if (!state.alert || !state.alert.message) {
@@ -419,6 +460,10 @@
     }
 
     function renderHeader() {
+        if (!nodes.currentEvent || !nodes.planSummary) {
+            return;
+        }
+
         const event = getSelectedEvent();
         const savedIds = getSavedSessionIds();
         const conflictCount = getConflictCount(savedIds);
@@ -440,6 +485,10 @@
     }
 
     function renderSelectedEvent() {
+        if (!nodes.selectedTitle || !nodes.selectedMeta || !nodes.openEvent) {
+            return;
+        }
+
         const event = getSelectedEvent();
 
         if (!event) {
@@ -462,6 +511,10 @@
     }
 
     function renderControls() {
+        if (!nodes.eventSelect) {
+            return;
+        }
+
         const events = getRenderableEvents();
         const previousValue = nodes.eventSelect.value;
         const fragment = document.createDocumentFragment();
@@ -481,11 +534,19 @@
         nodes.eventSelect.replaceChildren(fragment);
         nodes.eventSelect.value = state.selectedEventUrl || previousValue || '';
         nodes.eventSelect.disabled = state.loadingEvents || state.savingEvent;
-        nodes.refreshEvents.disabled = state.loadingEvents;
-        nodes.refreshSchedule.disabled = state.loadingSchedule || !state.selectedEventUrl;
+        if (nodes.refreshEvents) {
+            nodes.refreshEvents.disabled = state.loadingEvents;
+        }
+        if (nodes.refreshSchedule) {
+            nodes.refreshSchedule.disabled = state.loadingSchedule || !state.selectedEventUrl;
+        }
     }
 
     function renderEvents() {
+        if (!nodes.eventList || !nodes.eventCount) {
+            return;
+        }
+
         const events = getRenderableEvents();
         nodes.eventList.replaceChildren();
         nodes.eventCount.textContent = events.length ? String(events.length) : '';
@@ -532,7 +593,14 @@
         nodes.schedule.replaceChildren();
 
         if (!state.selectedEventUrl) {
-            nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Select a WordCamp.' }));
+            const empty = element('div', { className: 'wcc-empty' });
+            empty.append(element('p', { text: 'Select a WordCamp.' }));
+            empty.append(element('a', {
+                className: 'wcc-button',
+                href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
+                text: 'Organize',
+            }));
+            nodes.schedule.append(empty);
             return;
         }
 
@@ -849,20 +917,10 @@
 
     function renderCompanionTopLink() {
         const wrapper = element('div', { className: 'wcc-companion-top' });
-        const organizeButton = element('button', {
+        const organizeButton = element('a', {
             className: 'wcc-organize-link',
-            type: 'button',
+            href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
             text: 'Organize',
-        });
-
-        organizeButton.addEventListener('click', function () {
-            state.view = 'schedule';
-            state.pickerOpen = false;
-            render();
-
-            if (state.schedule && state.schedule.mode !== 'full') {
-                loadSchedule(false, 'full');
-            }
         });
 
         wrapper.append(organizeButton);
@@ -1869,6 +1927,10 @@
     }
 
     function getSelectedEvent() {
+        if (state.schedule && state.schedule.event && state.schedule.event.event_url === state.selectedEventUrl) {
+            return state.schedule.event;
+        }
+
         return getEventByUrl(state.selectedEventUrl);
     }
 

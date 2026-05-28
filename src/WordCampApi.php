@@ -155,6 +155,31 @@ class WordCampApi {
         return $payload;
     }
 
+    public function get_wordcamp_by_event_url( string $event_url, bool $force_refresh = false ) {
+        $event_url = $this->normalize_event_site_url( $event_url );
+
+        if ( '' === $event_url ) {
+            return null;
+        }
+
+        $wordcamps = $this->get_wordcamps( $force_refresh );
+        if ( is_wp_error( $wordcamps ) ) {
+            return $wordcamps;
+        }
+
+        foreach ( $wordcamps['wordcamps'] ?? [] as $wordcamp ) {
+            if ( ! is_array( $wordcamp ) || empty( $wordcamp['event_url'] ) ) {
+                continue;
+            }
+
+            if ( $this->normalize_event_site_url( (string) $wordcamp['event_url'] ) === $event_url ) {
+                return $wordcamp;
+            }
+        }
+
+        return null;
+    }
+
     public function get_companion_schedule( string $event_url, array $session_ids = [], bool $force_refresh = false, int $cache_version = 0 ) {
         $event_url = $this->normalize_event_site_url( $event_url );
         $session_ids = array_values( array_unique( array_filter( array_map( 'absint', $session_ids ) ) ) );

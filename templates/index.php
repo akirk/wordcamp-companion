@@ -9,7 +9,7 @@
 <body>
     <?php wp_app_body_open(); ?>
 
-    <main id="wordcamp-companion-app" class="wcc-app">
+    <main id="wordcamp-companion-app" class="wcc-app is-focused is-live-companion" data-page="companion">
         <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>">
             <div>
                 <span class="wcc-kicker"><?php echo esc_html__( 'Debug Time', 'wordcamp-companion' ); ?></span>
@@ -33,60 +33,10 @@
             <button id="wcc-debug-reset" class="wcc-button" type="button"><?php echo esc_html__( 'Reset', 'wordcamp-companion' ); ?></button>
         </section>
 
-        <header class="wcc-header">
-            <div>
-                <h1><?php echo esc_html__( 'WordCamp Companion', 'wordcamp-companion' ); ?></h1>
-                <p id="wcc-current-event" class="wcc-current-event"></p>
-            </div>
-            <div id="wcc-plan-summary" class="wcc-plan-summary"></div>
-        </header>
-
-        <section id="wcc-selected-event" class="wcc-selected-event" hidden>
-            <div>
-                <span class="wcc-kicker"><?php echo esc_html__( 'Selected WordCamp', 'wordcamp-companion' ); ?></span>
-                <h2 id="wcc-selected-title"></h2>
-                <p id="wcc-selected-meta"></p>
-            </div>
-            <div class="wcc-selected-actions">
-                <a id="wcc-open-event" class="wcc-button" href="#" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Event Site', 'wordcamp-companion' ); ?></a>
-                <button id="wcc-change-event" class="wcc-button" type="button"><?php echo esc_html__( 'Change WordCamp', 'wordcamp-companion' ); ?></button>
-            </div>
-        </section>
-
-        <section id="wcc-picker" class="wcc-picker" aria-label="<?php echo esc_attr__( 'Choose a WordCamp', 'wordcamp-companion' ); ?>">
-            <label class="wcc-field">
-                <span><?php echo esc_html__( 'WordCamp', 'wordcamp-companion' ); ?></span>
-                <select id="wcc-event-select">
-                    <option value=""><?php echo esc_html__( 'Loading WordCamps...', 'wordcamp-companion' ); ?></option>
-                </select>
-            </label>
-
-            <div class="wcc-actions">
-                <button id="wcc-refresh-events" class="wcc-button" type="button"><?php echo esc_html__( 'Refresh Events', 'wordcamp-companion' ); ?></button>
-            </div>
-        </section>
-
-        <section id="wcc-planner-nav" class="wcc-planner-nav" aria-label="<?php echo esc_attr__( 'Planner controls', 'wordcamp-companion' ); ?>">
-            <div class="wcc-tabs" role="tablist" aria-label="<?php echo esc_attr__( 'Schedule views', 'wordcamp-companion' ); ?>">
-                <button id="wcc-tab-companion" class="wcc-tab is-active" type="button" role="tab" aria-selected="true" data-view="companion"><?php echo esc_html__( 'Companion', 'wordcamp-companion' ); ?></button>
-                <button id="wcc-tab-schedule" class="wcc-tab" type="button" role="tab" aria-selected="false" data-view="schedule"><?php echo esc_html__( 'Schedule', 'wordcamp-companion' ); ?></button>
-                <button id="wcc-tab-plan" class="wcc-tab" type="button" role="tab" aria-selected="false" data-view="plan"><?php echo esc_html__( 'My Plan', 'wordcamp-companion' ); ?></button>
-            </div>
-            <button id="wcc-refresh-schedule" class="wcc-button" type="button"><?php echo esc_html__( 'Refresh Schedule', 'wordcamp-companion' ); ?></button>
-        </section>
-
         <div id="wcc-alerts" class="wcc-alerts" aria-live="polite"></div>
 
         <section class="wcc-content">
-            <aside class="wcc-sidebar" aria-label="<?php echo esc_attr__( 'Upcoming WordCamps', 'wordcamp-companion' ); ?>">
-                <div class="wcc-sidebar-header">
-                    <h2><?php echo esc_html__( 'Upcoming', 'wordcamp-companion' ); ?></h2>
-                    <span id="wcc-event-count" class="wcc-count"></span>
-                </div>
-                <div id="wcc-event-list" class="wcc-event-list"></div>
-            </aside>
-
-            <section class="wcc-main" aria-label="<?php echo esc_attr__( 'WordCamp schedule', 'wordcamp-companion' ); ?>">
+            <section class="wcc-main" aria-label="<?php echo esc_attr__( 'WordCamp companion timeline', 'wordcamp-companion' ); ?>">
                 <div id="wcc-status" class="wcc-status"></div>
                 <div id="wcc-schedule" class="wcc-schedule"></div>
             </section>
