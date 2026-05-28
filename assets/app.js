@@ -1213,11 +1213,11 @@
     }
 
     async function setDebugTimeToWordCampStart() {
-        let start = getFirstWordCampStart();
+        let start = getFirstCompanionStart();
 
         if (!start && state.selectedEventUrl && !state.loadingSchedule) {
             await loadSchedule(false, 'companion');
-            start = getFirstWordCampStart();
+            start = getFirstCompanionStart();
         }
 
         if (!start) {
@@ -1229,29 +1229,17 @@
         render();
     }
 
-    function getFirstWordCampStart() {
-        if (state.schedule && state.schedule.days && typeof state.schedule.days === 'object') {
-            const starts = Object.keys(state.schedule.days).map(function (key) {
-                return Number(state.schedule.days[key].start || 0);
-            }).filter(function (start) {
-                return start > 0;
-            });
-
-            if (starts.length) {
-                return Math.min.apply(null, starts);
-            }
-        }
-
+    function getFirstCompanionStart() {
         const timeline = buildCompanionTimeline();
-        const arrival = timeline.steps.find(function (step) {
-            return step.type === 'arrival';
+        const firstStep = timeline.steps.find(function (step) {
+            return step.start;
         });
 
-        if (!arrival || !arrival.dayStart && !arrival.start) {
+        if (!firstStep || !firstStep.start) {
             return null;
         }
 
-        return Number(arrival.dayStart || arrival.start);
+        return Number(firstStep.start);
     }
 
     function isCompanionStepPast(step, now) {
