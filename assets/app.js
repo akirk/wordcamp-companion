@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.23';
+    const SCRIPT_BUILD = '20260528.24';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1293,7 +1293,7 @@
             return details;
         }
 
-        details.append(renderGapSchedule(candidates, timeZone));
+        details.append(renderGapSchedule(candidates, timeZone, step));
 
         return details;
     }
@@ -1302,7 +1302,7 @@
         return [step.dayKey || step.day_key || '', step.start || 0, step.end || 0].join(':');
     }
 
-    function renderGapSchedule(candidates, timeZone) {
+    function renderGapSchedule(candidates, timeZone, gap) {
         const tracks = getTracksForSessions(candidates);
         const grid = element('div', { className: 'wcc-gap-grid' });
         const columns = '64px repeat(' + Math.max(1, tracks.length) + ', minmax(150px, 1fr))';
@@ -1325,7 +1325,7 @@
             tracks.forEach(function (track) {
                 const cell = element('div', { className: 'wcc-gap-cell' });
                 (byTrack[track] || []).forEach(function (session) {
-                    cell.append(renderGapCandidate(session, timeZone));
+                    cell.append(renderGapCandidate(session, timeZone, gap));
                 });
                 row.append(cell);
             });
@@ -1336,8 +1336,9 @@
         return grid;
     }
 
-    function renderGapCandidate(session, timeZone) {
+    function renderGapCandidate(session, timeZone, gap) {
         const conflicts = getConflictsForSession(session, getSavedSessionIds());
+        const boundaryNotices = getGapBoundaryNotices(session, gap, timeZone);
         const button = element('button', {
             className: 'wcc-gap-candidate' + (conflicts.length ? ' has-conflict' : ''),
             type: 'button',
@@ -1349,7 +1350,7 @@
         }
 
         if (conflicts.length) {
-            meta.push('Same time as ' + conflicts.map(function (conflict) {
+            meta.push('Overlaps ' + conflicts.map(function (conflict) {
                 return conflict.title || 'saved session';
             }).join(', '));
         }
@@ -1359,7 +1360,24 @@
                 text: state.savingSessionId === session.id
                     ? 'Saving...'
                     : (session.title || 'Untitled session'),
-            }),
+            })
+        );
+
+        if (conflicts.length || boundaryNotices.length) {
+            const badges = element('span', { className: 'wcc-gap-badges' });
+
+            if (conflicts.length) {
+                badges.append(element('span', { className: 'wcc-overlap-badge', text: 'Overlaps your plan' }));
+            }
+
+            boundaryNotices.forEach(function (notice) {
+                badges.append(element('span', { className: 'wcc-slot-badge', text: notice }));
+            });
+
+            button.append(badges);
+        }
+
+        button.append(
             element('span', { text: meta.join(' / ') })
         );
         button.disabled = state.savingSessionId !== null;
@@ -1368,6 +1386,24 @@
         });
 
         return button;
+    }
+
+    function getGapBoundaryNotices(session, gap, timeZone) {
+        const notices = [];
+        const sessionStart = Number(session && session.start || 0);
+        const sessionEnd = Number(session && (session.end || session.start) || 0);
+        const gapStart = Number(gap && gap.start || 0);
+        const gapEnd = Number(gap && gap.end || 0);
+
+        if (sessionStart && gapStart && sessionStart < gapStart) {
+            notices.push('Started at ' + formatSlotTime(sessionStart, timeZone));
+        }
+
+        if (sessionEnd && gapEnd && sessionEnd > gapEnd) {
+            notices.push('Runs until ' + formatSlotTime(sessionEnd, timeZone));
+        }
+
+        return notices;
     }
 
     async function createSavedSessionPost(session) {

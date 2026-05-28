@@ -839,8 +839,37 @@ a:focus-visible {
     border-color: color-mix(in srgb, var(--wcc-warning), var(--wcc-border) 35%);
 }
 
+.wcc-gap-candidate.has-conflict {
+    background: color-mix(in srgb, var(--wcc-surface), var(--wcc-warning) 7%);
+}
+
 .wcc-gap-candidate strong {
     line-height: 1.25;
+}
+
+.wcc-gap-candidate .wcc-gap-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.wcc-gap-candidate .wcc-overlap-badge,
+.wcc-gap-candidate .wcc-slot-badge {
+    width: fit-content;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.wcc-gap-candidate .wcc-overlap-badge {
+    color: var(--wcc-warning);
+    background: color-mix(in srgb, var(--wcc-warning), transparent 88%);
+}
+
+.wcc-gap-candidate .wcc-slot-badge {
+    color: var(--wcc-muted);
+    background: color-mix(in srgb, var(--wcc-muted), transparent 90%);
 }
 
 .wcc-gap-candidate span {

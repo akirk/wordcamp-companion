@@ -590,7 +590,7 @@ class RestController {
             $session_start = (int) $session['start'];
             $session_end = ! empty( $session['end'] ) ? (int) $session['end'] : $session_start;
 
-            if ( $session_start >= $gap_start && $session_end <= $gap_end ) {
+            if ( $session_start < $gap_end && $session_end > $gap_start ) {
                 $candidates[] = $this->compact_session( $session );
             }
         }
