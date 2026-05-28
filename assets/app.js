@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.14';
+    const SCRIPT_BUILD = '20260528.15';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -402,11 +402,6 @@
 
         const timeZone = getSelectedTimezone();
         const now = getNow();
-        const parts = [];
-
-        if (state.debugOffsetSeconds) {
-            parts.push('offset ' + formatSignedOffset(state.debugOffsetSeconds));
-        }
 
         nodes.debugCurrent.textContent = formatDate(now, {
             weekday: 'short',
@@ -414,7 +409,7 @@
             day: 'numeric',
             hour: 'numeric',
             minute: '2-digit',
-        }, timeZone) + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+        }, timeZone);
         nodes.debugPlay.textContent = state.debugPlaying ? 'Pause' : 'Play';
         nodes.debugPlay.setAttribute('aria-pressed', state.debugPlaying ? 'true' : 'false');
         nodes.debugRateLabel.textContent = state.debugRate + 'x';
@@ -1261,7 +1256,7 @@
         }
 
         if (dayDistance === 1) {
-            return relative + ' - tomorrow at ' + time;
+            return 'Tomorrow at ' + time;
         }
 
         return relative + ' - ' + formatDate(start, {
@@ -1847,12 +1842,6 @@
         }
 
         return formatArrivalOffset(offset) + ' after start';
-    }
-
-    function formatSignedOffset(seconds) {
-        const sign = seconds < 0 ? '-' : '+';
-
-        return sign + formatRelativeDuration(Math.abs(seconds));
     }
 
     function formatArrivalOffset(seconds) {
