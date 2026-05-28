@@ -590,6 +590,11 @@ a:focus-visible {
     border-color: transparent;
 }
 
+.wcc-companion-step.is-gap {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
 .wcc-companion-step.is-track .wcc-companion-marker,
 .wcc-companion-step.is-break .wcc-companion-marker,
 .wcc-companion-step.is-day-end .wcc-companion-marker,
@@ -673,7 +678,7 @@ a:focus-visible {
 }
 
 .wcc-gap-picker {
-    margin-top: 8px;
+    margin-top: 0;
 }
 
 .wcc-gap-toggle {

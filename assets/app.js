@@ -830,6 +830,7 @@
 
     function renderCompanionStep(step, now, index) {
         const isCurrent = isCompanionStepCurrent(step, now);
+        const isGap = step.type === 'gap';
         const item = element('article', {
             className: [
                 'wcc-companion-step',
@@ -846,10 +847,12 @@
         const marker = element('div', { className: 'wcc-companion-marker' });
         const body = element('div', { className: 'wcc-companion-body' });
 
-        body.append(
-            element('div', { className: 'wcc-companion-label', text: label }),
-            element('h3', { text: step.title })
-        );
+        if (!isGap) {
+            body.append(
+                element('div', { className: 'wcc-companion-label', text: label }),
+                element('h3', { text: step.title })
+            );
+        }
 
         if (step.detail) {
             body.append(element('p', { className: 'wcc-companion-detail', text: step.detail }));
@@ -872,7 +875,7 @@
         }
 
         const timing = formatCompanionTiming(step, now, timeZone, index);
-        if (timing) {
+        if (timing && !isGap) {
             body.append(element('div', { className: 'wcc-companion-timing', text: timing }));
         }
 
