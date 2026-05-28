@@ -69,6 +69,12 @@ a:focus-visible {
     overflow-x: auto;
 }
 
+.wcc-app.is-live-companion .wcc-debug-clock {
+    width: min(1180px, calc(100vw - 24px));
+    margin-left: 50%;
+    transform: translateX(-50%);
+}
+
 .wcc-debug-clock strong {
     display: block;
     margin-top: 2px;
