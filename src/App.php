@@ -66,13 +66,14 @@ class App extends BaseApp {
         $css_path = dirname( __DIR__ ) . '/assets/app.css';
         $js_path = dirname( __DIR__ ) . '/assets/app.js';
         $version = defined( 'WORDCAMP_COMPANION_VERSION' ) ? WORDCAMP_COMPANION_VERSION : '1.0.0';
+        $asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : $version;
 
         if ( file_exists( $css_path ) ) {
             wp_app_enqueue_style(
                 'wordcamp-companion',
                 plugins_url( 'assets/app.css', $plugin_file ),
                 [],
-                filemtime( $css_path )
+                $asset_version . '-' . filemtime( $css_path )
             );
         }
 
@@ -99,7 +100,7 @@ class App extends BaseApp {
                 'wordcamp-companion',
                 plugins_url( 'assets/app.js', $plugin_file ),
                 [],
-                filemtime( $js_path )
+                $asset_version . '-' . filemtime( $js_path )
             );
         } else {
             wp_app_enqueue_script(

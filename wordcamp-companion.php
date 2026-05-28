@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordCamp Companion
  * Description: Plan your WordCamp attendance and save sessions from event schedules.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Alex Kirk
  * Text Domain: wordcamp-companion
  * Requires PHP: 7.4
@@ -14,7 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'WORDCAMP_COMPANION_VERSION', '1.0.0' );
+define( 'WORDCAMP_COMPANION_VERSION', '1.0.1' );
+define( 'WORDCAMP_COMPANION_ASSET_VERSION', '20260528.1' );
 
 require_once __DIR__ . '/vendor/autoload.php';
 
