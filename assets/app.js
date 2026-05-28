@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.20';
+    const SCRIPT_BUILD = '20260528.21';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -283,6 +283,7 @@
                     refresh: refresh ? '1' : '0',
                 },
             });
+            syncSelectedEventScheduleMetadata(state.schedule);
             state.loadingGapKey = '';
             state.openGapKey = '';
             resetCompanionAnimationState();
@@ -407,6 +408,41 @@
         };
     }
 
+    function syncSelectedEventScheduleMetadata(data) {
+        if (!data || !state.selectedEventUrl) {
+            return;
+        }
+
+        const selectedPlan = ensureSelectedPlan();
+        const event = selectedPlan.event && typeof selectedPlan.event === 'object'
+            ? selectedPlan.event
+            : { event_url: state.selectedEventUrl };
+
+        event.event_url = state.selectedEventUrl;
+
+        if (data.days && typeof data.days === 'object') {
+            event.schedule_days = data.days;
+        }
+
+        if (data.timezone) {
+            event.schedule_timezone = data.timezone;
+        }
+
+        if (data.site_name) {
+            event.site_name = data.site_name;
+        }
+
+        selectedPlan.event = event;
+
+        if (state.schedule && state.schedule.event && state.schedule.event.event_url === state.selectedEventUrl) {
+            state.schedule.event = Object.assign({}, state.schedule.event, {
+                schedule_days: event.schedule_days || state.schedule.event.schedule_days,
+                schedule_timezone: event.schedule_timezone || state.schedule.event.schedule_timezone,
+                site_name: event.site_name || state.schedule.event.site_name,
+            });
+        }
+    }
+
     async function loadGapCandidates(gapKey) {
         if (!state.selectedEventUrl || !state.schedule || state.schedule.gaps_loaded || state.loadingGapKey) {
             return;
@@ -422,6 +458,7 @@
                     refresh: '0',
                 },
             });
+            syncSelectedEventScheduleMetadata(data);
             state.schedule.gaps = Array.isArray(data.gaps) ? data.gaps : [];
             state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
             state.schedule.gaps_loaded = true;
@@ -465,9 +502,7 @@
             }
 
             state.alert = null;
-            if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
-                addSessionToCompanionSchedule(localSession);
-            } else if (wasSaved && state.schedule && state.schedule.mode === 'companion') {
+            if (state.schedule && state.schedule.mode === 'companion') {
                 state.schedule = buildLocalCompanionSchedule();
                 resetCompanionAnimationState();
             }
@@ -1413,82 +1448,6 @@
         }
 
         return null;
-    }
-
-    function addSessionToCompanionSchedule(session) {
-        if (!state.schedule || !Array.isArray(state.schedule.sessions)) {
-            return;
-        }
-
-        const sessionId = Number(session.id);
-        const exists = state.schedule.sessions.some(function (existing) {
-            return Number(existing.id) === sessionId;
-        });
-
-        if (!exists) {
-            state.schedule.sessions.push(Object.assign({}, session));
-            state.schedule.sessions.sort(compareSessions);
-        }
-
-        splitLoadedGapsAroundSession(session);
-        state.openGapKey = '';
-        resetCompanionAnimationState();
-    }
-
-    function splitLoadedGapsAroundSession(session) {
-        if (!state.schedule || !Array.isArray(state.schedule.gaps) || !session.start) {
-            return;
-        }
-
-        const timeZone = getSelectedTimezone();
-        const sessionId = Number(session.id);
-        const sessionStart = Number(session.start);
-        const sessionEnd = Number(session.end || session.start);
-        const sessionDayKey = getDateKey(sessionStart, timeZone);
-        const nextGaps = [];
-
-        state.schedule.gaps.forEach(function (gap) {
-            const gapStart = Number(gap.start || 0);
-            const gapEnd = Number(gap.end || gapStart);
-            const candidates = Array.isArray(gap.candidates) ? gap.candidates.filter(function (candidate) {
-                return Number(candidate.id) !== sessionId;
-            }) : [];
-            const containsSession = gap.day_key === sessionDayKey && gapStart <= sessionStart && sessionEnd <= gapEnd;
-
-            if (!containsSession) {
-                nextGaps.push(Object.assign({}, gap, { candidates: candidates }));
-                return;
-            }
-
-            appendLocalGap(nextGaps, gap.day_key, gapStart, sessionStart, candidates);
-            appendLocalGap(nextGaps, gap.day_key, sessionEnd, gapEnd, candidates);
-        });
-
-        state.schedule.gaps = nextGaps;
-    }
-
-    function appendLocalGap(gaps, dayKey, start, end, candidates) {
-        if (end - start < 15 * 60) {
-            return;
-        }
-
-        const nextCandidates = (candidates || []).filter(function (session) {
-            const sessionStart = Number(session.start || 0);
-            const sessionEnd = Number(session.end || sessionStart);
-
-            return sessionStart >= start && sessionEnd <= end;
-        });
-
-        if (!nextCandidates.length) {
-            return;
-        }
-
-        gaps.push({
-            day_key: dayKey,
-            start: start,
-            end: end,
-            candidates: nextCandidates,
-        });
     }
 
     function getCompanionStepLabel(step, now, index, timeLabel) {
