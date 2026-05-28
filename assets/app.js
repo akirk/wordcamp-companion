@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.35';
+    const SCRIPT_BUILD = '20260528.36';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -609,15 +609,19 @@
     }
 
     function render() {
-        renderLayout();
-        renderDebugClock();
-        renderAlerts();
-        renderHeader();
-        renderSelectedEvent();
-        renderControls();
-        renderEvents();
-        renderTabs();
-        renderSchedule();
+        try {
+            renderLayout();
+            renderDebugClock();
+            renderAlerts();
+            renderHeader();
+            renderSelectedEvent();
+            renderControls();
+            renderEvents();
+            renderTabs();
+            renderSchedule();
+        } catch (error) {
+            renderCompanionRenderError(error);
+        }
     }
 
     function renderDebugClock() {
@@ -825,6 +829,14 @@
             return;
         }
 
+        try {
+            renderScheduleContent();
+        } catch (error) {
+            renderCompanionRenderError(error);
+        }
+    }
+
+    function renderScheduleContent() {
         nodes.status.textContent = '';
         nodes.schedule.replaceChildren();
 
@@ -845,7 +857,14 @@
         }
 
         if (!state.schedule) {
-            nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Schedule unavailable.' }));
+            if (state.page === 'companion') {
+                nodes.schedule.append(renderCompanionFallback(
+                    'Companion unavailable',
+                    'Choose a WordCamp again to rebuild your companion timeline.'
+                ));
+            } else {
+                nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Schedule unavailable.' }));
+            }
             return;
         }
 
@@ -1047,10 +1066,17 @@
     }
 
     function renderEmptyCompanion() {
+        return renderCompanionFallback(
+            'No WordCamp selected',
+            'Choose the WordCamp you are planning to attend to start your companion timeline.'
+        );
+    }
+
+    function renderCompanionFallback(title, detail) {
         const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
         empty.append(
-            element('h1', { text: 'No WordCamp selected' }),
-            element('p', { text: 'Choose the WordCamp you are planning to attend to start your companion timeline.' }),
+            element('h1', { text: title }),
+            element('p', { text: detail }),
             element('p', {
                 className: 'wcc-empty-actions',
                 children: [
@@ -1064,6 +1090,23 @@
         );
 
         return empty;
+    }
+
+    function renderCompanionRenderError(error) {
+        if (window.console && typeof window.console.error === 'function') {
+            window.console.error(error);
+        }
+
+        if (nodes.status) {
+            nodes.status.textContent = '';
+        }
+
+        if (nodes.schedule) {
+            nodes.schedule.replaceChildren(renderCompanionFallback(
+                'Companion unavailable',
+                'Something interrupted the timeline. Choose a WordCamp again or refresh this page.'
+            ));
+        }
     }
 
     function getRenderableCompanionSteps(visibleSteps) {

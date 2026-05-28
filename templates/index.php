@@ -38,7 +38,15 @@
         <section class="wcc-content">
             <section class="wcc-main" aria-label="<?php echo esc_attr__( 'WordCamp companion timeline', 'wordcamp-companion' ); ?>">
                 <div id="wcc-status" class="wcc-status"></div>
-                <div id="wcc-schedule" class="wcc-schedule"></div>
+                <div id="wcc-schedule" class="wcc-schedule">
+                    <div class="wcc-empty wcc-empty-companion">
+                        <h1><?php echo esc_html__( 'No WordCamp selected', 'wordcamp-companion' ); ?></h1>
+                        <p><?php echo esc_html__( 'Choose the WordCamp you are planning to attend to start your companion timeline.', 'wordcamp-companion' ); ?></p>
+                        <p class="wcc-empty-actions">
+                            <a class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/plan-your/' ) ); ?>"><?php echo esc_html__( 'wordcamps', 'wordcamp-companion' ); ?></a>
+                        </p>
+                    </div>
+                </div>
             </section>
         </section>
 
