@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.27';
+    const SCRIPT_BUILD = '20260528.28';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -800,7 +800,7 @@
             empty.append(element('a', {
                 className: 'wcc-button',
                 href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
-                text: 'Organize',
+                text: 'Plan your day',
             }));
             nodes.schedule.append(empty);
             return;
@@ -1122,7 +1122,7 @@
         const organizeButton = element('a', {
             className: 'wcc-organize-link',
             href: config.organizeUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/organize/') : '/wordcamp-companion/organize/'),
-            text: 'Organize',
+            text: 'Plan your day',
         });
 
         wrapper.append(organizeButton);
