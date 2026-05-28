@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.17';
+    const SCRIPT_BUILD = '20260528.18';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -944,10 +944,14 @@
         const body = element('div', { className: 'wcc-companion-body' });
 
         if (!isGap) {
-            body.append(
-                element('div', { className: 'wcc-companion-label', text: label }),
-                element('h3', { text: step.title })
-            );
+            const heading = element('div', { className: 'wcc-companion-heading' });
+            heading.append(element('h3', { text: step.title }));
+
+            if (step.type === 'session' && step.session) {
+                heading.append(renderCompanionRemoveButton(step.session));
+            }
+
+            body.append(element('div', { className: 'wcc-companion-label', text: label }), heading);
         }
 
         if (step.detail) {
@@ -993,9 +997,14 @@
 
         alternatives.forEach(function (session) {
             const item = element('article', { className: 'wcc-choice-item' });
+            const heading = element('div', { className: 'wcc-choice-heading' });
             const meta = [getPrimaryTrack(session), formatSessionTime(session, timeZone)].filter(Boolean);
 
-            item.append(element('strong', { text: session.title || 'Untitled session' }));
+            heading.append(
+                element('strong', { text: session.title || 'Untitled session' }),
+                renderCompanionRemoveButton(session)
+            );
+            item.append(heading);
 
             if (session.speaker_names && session.speaker_names.length) {
                 meta.push(session.speaker_names.join(', '));
@@ -1009,6 +1018,26 @@
         });
 
         return wrapper;
+    }
+
+    function renderCompanionRemoveButton(session) {
+        const title = session && session.title ? session.title : 'session';
+        const button = element('button', {
+            className: 'wcc-companion-remove',
+            type: 'button',
+            text: 'x',
+            title: 'Remove from schedule',
+            'aria-label': 'Remove ' + title + ' from your schedule',
+        });
+
+        button.disabled = state.savingSessionId !== null;
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleSession(session.id);
+        });
+
+        return button;
     }
 
     function renderMapLinks(links) {

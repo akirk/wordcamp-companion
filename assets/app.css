@@ -534,10 +534,48 @@ a:focus-visible {
     text-transform: none;
 }
 
+.wcc-companion-heading,
+.wcc-choice-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
 .wcc-companion-body h3 {
+    min-width: 0;
     margin: 2px 0 0;
     font-size: 1.18rem;
     line-height: 1.25;
+}
+
+.wcc-companion-remove {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-top: -1px;
+    padding: 0;
+    color: var(--wcc-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 750;
+    line-height: 1;
+}
+
+.wcc-companion-remove:hover {
+    color: var(--wcc-danger);
+    background: color-mix(in srgb, var(--wcc-danger), transparent 92%);
+    border-color: color-mix(in srgb, var(--wcc-danger), transparent 62%);
+}
+
+.wcc-companion-remove:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
 }
 
 .wcc-companion-detail {
@@ -604,6 +642,7 @@ a:focus-visible {
 }
 
 .wcc-choice-item strong {
+    min-width: 0;
     line-height: 1.25;
 }
 
