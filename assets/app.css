@@ -616,27 +616,193 @@ a:focus-visible {
     font-size: 0.88rem;
 }
 
-.wcc-gap-candidates {
+.wcc-companion-queue {
     display: grid;
+    gap: 4px;
+    padding: 4px 0 0 40px;
+}
+
+.wcc-companion-queue-label {
+    color: var(--wcc-muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.wcc-companion-queue-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 74px 24px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 0;
+    border-top: 1px solid var(--wcc-border);
+}
+
+.wcc-companion-queue-time {
+    color: var(--wcc-muted);
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.wcc-companion-queue-marker {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+    color: var(--wcc-warning);
+    background: var(--wcc-bg);
+    border: 1px solid var(--wcc-border);
+    border-radius: 999px;
+}
+
+.wcc-companion-queue-step::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    left: 95px;
+    width: 2px;
+    background: var(--wcc-border);
+}
+
+.wcc-companion-queue-step.is-session::before {
+    display: none;
+}
+
+.wcc-companion-queue-step.is-session .wcc-companion-queue-marker {
+    width: 10px;
+    height: 10px;
+    margin: 7px auto 0;
+    background: var(--wcc-muted);
+    border: 0;
+}
+
+.wcc-companion-queue-step.is-track .wcc-companion-queue-marker::before {
+    content: "\1F6B6";
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.wcc-companion-queue-step.is-break .wcc-companion-queue-marker::before {
+    content: "";
+    width: 10px;
+    height: 2px;
+    background: var(--wcc-muted);
+}
+
+.wcc-companion-queue-step.is-day-end .wcc-companion-queue-marker::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--wcc-success);
+    border-radius: 999px;
+}
+
+.wcc-companion-queue-step.is-gap .wcc-companion-queue-marker::before {
+    content: "+";
+    color: var(--wcc-success);
+    font-weight: 800;
+    line-height: 1;
+}
+
+.wcc-companion-queue-body {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.wcc-companion-queue-body strong {
+    line-height: 1.25;
+}
+
+.wcc-companion-queue-body span {
+    display: block;
+    color: var(--wcc-muted);
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.wcc-companion-queue-step > .wcc-gap-picker {
+    grid-column: 3;
+    margin-top: -2px;
+}
+
+.wcc-gap-picker {
+    margin-top: 8px;
+}
+
+.wcc-gap-toggle {
+    width: fit-content;
+    min-height: 28px;
+    padding: 3px 9px;
+    color: var(--wcc-success);
+    background: color-mix(in srgb, var(--wcc-success), transparent 92%);
+    border: 1px solid color-mix(in srgb, var(--wcc-success), transparent 66%);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 750;
+    list-style-position: inside;
+    opacity: 0.72;
+}
+
+.wcc-gap-picker[open] .wcc-gap-toggle,
+.wcc-companion-step:hover .wcc-gap-toggle,
+.wcc-companion-queue-step:hover .wcc-gap-toggle {
+    opacity: 1;
+}
+
+.wcc-gap-empty {
+    margin-top: 8px;
+    color: var(--wcc-muted);
+    font-size: 0.88rem;
+}
+
+.wcc-gap-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 8px;
     margin-top: 8px;
 }
 
+.wcc-gap-column {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+}
+
+.wcc-gap-column h4 {
+    margin: 0;
+    color: var(--wcc-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+}
+
 .wcc-gap-candidate {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
     padding: 9px;
+    color: var(--wcc-text);
+    text-align: left;
     background: var(--wcc-surface);
     border: 1px solid var(--wcc-border);
     border-radius: 8px;
+    cursor: pointer;
 }
 
-.wcc-gap-candidate div {
-    display: grid;
-    gap: 2px;
-    min-width: 0;
+.wcc-gap-candidate {
+    line-height: 1.25;
+}
+
+.wcc-gap-candidate:hover {
+    border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 45%);
 }
 
 .wcc-gap-candidate strong {

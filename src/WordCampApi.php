@@ -9,6 +9,7 @@ class WordCampApi {
     private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v2';
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
+    private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const MAX_COLLECTION_PAGES = 20;
 
     public function get_wordcamps( bool $force_refresh = false ) {
@@ -153,6 +154,205 @@ class WordCampApi {
         return $payload;
     }
 
+    public function get_companion_schedule( string $event_url, array $session_ids = [], bool $force_refresh = false ) {
+        $event_url = $this->normalize_event_site_url( $event_url );
+        $session_ids = array_values( array_unique( array_filter( array_map( 'absint', $session_ids ) ) ) );
+
+        if ( '' === $event_url || ! $this->is_allowed_wordcamp_url( $event_url ) ) {
+            return new WP_Error(
+                'wordcamp_companion_invalid_event_url',
+                __( 'Choose a valid WordCamp site URL.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $cache_key = 'wordcamp_companion_schedule_companion_' . md5( $event_url . ':' . implode( ',', $session_ids ) );
+        if ( ! $force_refresh ) {
+            $cached = get_transient( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
+        }
+
+        $context = $this->get_companion_context( $event_url );
+        if ( is_wp_error( $context ) ) {
+            return $context;
+        }
+
+        $start_sessions = $this->get_companion_start_sessions( $context['event_url'] );
+        if ( is_wp_error( $start_sessions ) ) {
+            return $start_sessions;
+        }
+
+        $sessions = $this->get_companion_session_subset( $context['event_url'], $session_ids );
+        if ( is_wp_error( $sessions ) ) {
+            return $sessions;
+        }
+
+        $sessions = $this->merge_sessions_by_id( $start_sessions, $sessions );
+
+        $tracks = $this->get_companion_tracks( $context );
+        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
+
+        $payload = [
+            'event_url'  => $context['event_url'],
+            'site_name'  => $context['site_name'],
+            'timezone'   => $context['timezone'],
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_tracks ),
+            'tracks'     => array_values( $normalized_tracks ),
+            'fetched_at' => time(),
+        ];
+
+        set_transient( $cache_key, $payload, self::COMPANION_CACHE_TTL );
+
+        return $payload;
+    }
+
+    public function get_companion_candidate_schedule( string $event_url, bool $force_refresh = false ) {
+        $event_url = $this->normalize_event_site_url( $event_url );
+
+        if ( '' === $event_url || ! $this->is_allowed_wordcamp_url( $event_url ) ) {
+            return new WP_Error(
+                'wordcamp_companion_invalid_event_url',
+                __( 'Choose a valid WordCamp site URL.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $cache_key = 'wordcamp_companion_schedule_candidates_' . md5( $event_url );
+        if ( ! $force_refresh ) {
+            $cached = get_transient( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
+        }
+
+        $context = $this->get_companion_context( $event_url );
+        if ( is_wp_error( $context ) ) {
+            return $context;
+        }
+
+        $sessions = $this->get_companion_all_sessions( $context['event_url'] );
+        if ( is_wp_error( $sessions ) ) {
+            return $sessions;
+        }
+
+        $tracks = $this->get_companion_tracks( $context );
+        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
+
+        $payload = [
+            'event_url'  => $context['event_url'],
+            'site_name'  => $context['site_name'],
+            'timezone'   => $context['timezone'],
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_tracks ),
+            'tracks'     => array_values( $normalized_tracks ),
+            'fetched_at' => time(),
+        ];
+
+        set_transient( $cache_key, $payload, self::COMPANION_CACHE_TTL );
+
+        return $payload;
+    }
+
+    private function get_companion_context( string $event_url ) {
+        $rest_index = $this->request_json( trailingslashit( $event_url ) . 'wp-json/' );
+        if ( is_wp_error( $rest_index ) ) {
+            return $rest_index;
+        }
+
+        $index = is_array( $rest_index['body'] ) ? $rest_index['body'] : [];
+        if ( ! $this->rest_route_exists( $index, '/wp/v2/sessions' ) ) {
+            return new WP_Error(
+                'wordcamp_companion_schedule_unavailable',
+                __( 'This WordCamp has not published a REST schedule yet.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
+        return [
+            'event_url' => $event_url,
+            'index'     => $index,
+            'site_name' => isset( $index['name'] ) ? $this->normalize_text( $index['name'] ) : '',
+            'timezone'  => isset( $index['timezone_string'] ) ? sanitize_text_field( $index['timezone_string'] ) : '',
+        ];
+    }
+
+    private function get_companion_start_sessions( string $event_url ) {
+        $endpoint = add_query_arg(
+            [
+                '_fields' => 'id,slug,title,link,meta,session_track',
+                'orderby' => 'session_date',
+                'order'   => 'asc',
+            ],
+            trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions'
+        );
+
+        return $this->get_rest_page( $endpoint, 1 );
+    }
+
+    private function get_companion_session_subset( string $event_url, array $session_ids ) {
+        $session_ids = array_values( array_unique( array_filter( array_map( 'absint', $session_ids ) ) ) );
+
+        if ( empty( $session_ids ) ) {
+            return [];
+        }
+
+        return $this->get_rest_collection(
+            add_query_arg(
+                [
+                    '_fields' => 'id,slug,title,link,meta,session_track',
+                    'include' => implode( ',', $session_ids ),
+                    'orderby' => 'include',
+                ],
+                trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions'
+            )
+        );
+    }
+
+    private function get_companion_all_sessions( string $event_url ) {
+        return $this->get_rest_collection(
+            add_query_arg(
+                [
+                    '_fields' => 'id,slug,title,link,meta,session_track',
+                    'orderby' => 'session_date',
+                    'order'   => 'asc',
+                ],
+                trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions'
+            )
+        );
+    }
+
+    private function get_companion_tracks( array $context ) {
+        if ( ! $this->rest_route_exists( $context['index'], '/wp/v2/session_track' ) ) {
+            return [];
+        }
+
+        return $this->get_rest_collection(
+            add_query_arg(
+                [
+                    '_fields' => 'id,name,slug',
+                ],
+                trailingslashit( $context['event_url'] ) . 'wp-json/wp/v2/session_track'
+            )
+        );
+    }
+
+    private function merge_sessions_by_id( array ...$session_sets ): array {
+        $sessions = [];
+
+        foreach ( $session_sets as $session_set ) {
+            foreach ( $session_set as $session ) {
+                if ( ! is_array( $session ) || empty( $session['id'] ) ) {
+                    continue;
+                }
+
+                $sessions[ absint( $session['id'] ) ] = $session;
+            }
+        }
+
+        return array_values( $sessions );
+    }
+
     public function normalize_event_site_url( string $url ): string {
         $url = trim( $url );
 
@@ -282,6 +482,53 @@ class WordCampApi {
         return array_values( $normalized );
     }
 
+    private function normalize_companion_sessions( array $sessions, array $tracks ): array {
+        $normalized = [];
+
+        foreach ( $sessions as $session ) {
+            if ( ! is_array( $session ) ) {
+                continue;
+            }
+
+            $meta = isset( $session['meta'] ) && is_array( $session['meta'] ) ? $session['meta'] : [];
+            $track_ids = $this->normalize_id_list( $session['session_track'] ?? [] );
+            $start = $this->normalize_timestamp( $meta['_wcpt_session_time'] ?? null );
+            $duration = isset( $meta['_wcpt_session_duration'] ) ? absint( $meta['_wcpt_session_duration'] ) : 0;
+
+            $normalized[] = [
+                'id'             => isset( $session['id'] ) ? absint( $session['id'] ) : 0,
+                'slug'           => isset( $session['slug'] ) ? sanitize_title( $session['slug'] ) : '',
+                'title'          => isset( $session['title']['rendered'] ) ? $this->normalize_text( $session['title']['rendered'] ) : '',
+                'description'    => '',
+                'url'            => isset( $session['link'] ) ? esc_url_raw( $session['link'] ) : '',
+                'start'          => $start,
+                'duration'       => $duration,
+                'end'            => $start && $duration ? $start + $duration : null,
+                'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
+                'speaker_ids'    => [],
+                'speaker_names'  => [],
+                'track_ids'      => $track_ids,
+                'track_names'    => $this->names_for_ids( $track_ids, $tracks ),
+                'category_ids'   => [],
+                'category_names' => [],
+            ];
+        }
+
+        usort(
+            $normalized,
+            function ( array $a, array $b ): int {
+                $time_compare = ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
+                if ( 0 !== $time_compare ) {
+                    return $time_compare;
+                }
+
+                return strcasecmp( $a['title'], $b['title'] );
+            }
+        );
+
+        return array_values( $normalized );
+    }
+
     private function normalize_speakers( array $speakers ): array {
         $normalized = [];
 
@@ -379,6 +626,32 @@ class WordCampApi {
         }
 
         return $items;
+    }
+
+    private function get_rest_page( string $endpoint_url, int $per_page ) {
+        $response = $this->request_json(
+            add_query_arg(
+                [
+                    'per_page' => max( 1, min( 100, $per_page ) ),
+                    'page'     => 1,
+                ],
+                $endpoint_url
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        if ( ! is_array( $response['body'] ) || ! $this->is_list_array( $response['body'] ) ) {
+            return new WP_Error(
+                'wordcamp_companion_invalid_collection',
+                __( 'The WordCamp site returned an unexpected schedule response.', 'wordcamp-companion' ),
+                [ 'status' => 502 ]
+            );
+        }
+
+        return $response['body'];
     }
 
     private function request_json( string $url ) {

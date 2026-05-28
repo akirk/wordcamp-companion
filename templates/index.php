@@ -18,8 +18,8 @@
             <button id="wcc-debug-play" class="wcc-debug-play" type="button" aria-pressed="false"><?php echo esc_html__( 'Play', 'wordcamp-companion' ); ?></button>
             <label class="wcc-debug-rate">
                 <span><?php echo esc_html__( 'Rate', 'wordcamp-companion' ); ?></span>
-                <input id="wcc-debug-rate" type="range" min="1" max="1200" step="1" value="60">
-                <strong id="wcc-debug-rate-label">60x</strong>
+                <input id="wcc-debug-rate" type="range" min="1" max="1200" step="1" value="300">
+                <strong id="wcc-debug-rate-label">300x</strong>
             </label>
             <div class="wcc-debug-jumps" aria-label="<?php echo esc_attr__( 'Quick time adjustments', 'wordcamp-companion' ); ?>">
                 <button type="button" data-debug-start="wordcamp"><?php echo esc_html__( 'Start', 'wordcamp-companion' ); ?></button>

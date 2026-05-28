@@ -76,6 +76,26 @@ class RestController {
 
         register_rest_route(
             self::NAMESPACE,
+            '/gap-candidates',
+            [
+                [
+                    'methods'             => 'GET',
+                    'callback'            => [ $this, 'get_gap_candidates' ],
+                    'permission_callback' => [ $this, 'can_read' ],
+                    'args'                => [
+                        'event_url' => [
+                            'sanitize_callback' => 'esc_url_raw',
+                        ],
+                        'refresh'   => [
+                            'sanitize_callback' => 'rest_sanitize_boolean',
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
             '/plan',
             [
                 [
@@ -160,13 +180,44 @@ class RestController {
 
         $plan = $this->repository->get_plan( get_current_user_id() );
         $saved_session_ids = $this->get_saved_session_ids( $plan, $event_url );
-        $schedule = $this->api->get_schedule( $event_url, (bool) $request->get_param( 'refresh' ) );
+        $schedule = $this->api->get_companion_schedule( $event_url, $saved_session_ids, (bool) $request->get_param( 'refresh' ) );
 
         if ( is_wp_error( $schedule ) ) {
             return $schedule;
         }
 
         return rest_ensure_response( $this->get_compact_companion_schedule( $schedule, $saved_session_ids ) );
+    }
+
+    public function get_gap_candidates( WP_REST_Request $request ) {
+        $event_url = $this->get_event_url_from_request( $request );
+
+        if ( '' === $event_url ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_event_url',
+                __( 'Select a WordCamp before loading session choices.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $plan = $this->repository->get_plan( get_current_user_id() );
+        $saved_session_ids = $this->get_saved_session_ids( $plan, $event_url );
+        $schedule = $this->api->get_companion_candidate_schedule( $event_url, (bool) $request->get_param( 'refresh' ) );
+
+        if ( is_wp_error( $schedule ) ) {
+            return $schedule;
+        }
+
+        return rest_ensure_response(
+            [
+                'event_url'  => $schedule['event_url'] ?? '',
+                'timezone'   => $schedule['timezone'] ?? '',
+                'days'       => $this->get_schedule_days( $schedule ),
+                'gaps'       => $saved_session_ids ? $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids ) : [],
+                'mode'       => 'gap-candidates',
+                'fetched_at' => $schedule['fetched_at'] ?? time(),
+            ]
+        );
     }
 
     private function get_event_url_from_request( WP_REST_Request $request ): string {
@@ -256,11 +307,20 @@ class RestController {
             'site_name'  => $schedule['site_name'] ?? '',
             'timezone'   => $schedule['timezone'] ?? '',
             'days'       => $this->compact_days( $first_sessions_by_day, $last_sessions_by_day ),
-            'gaps'       => $saved_session_ids ? $this->compact_gaps( $sessions, $saved_lookup, $timezone ) : [],
+            'gaps'       => [],
+            'gaps_loaded' => false,
             'sessions'   => array_values( $compact_sessions ),
             'mode'       => 'companion',
             'fetched_at' => $schedule['fetched_at'] ?? time(),
         ];
+    }
+
+    private function get_gap_candidates_for_saved_sessions( array $schedule, array $saved_session_ids ): array {
+        $sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [];
+        $saved_lookup = array_fill_keys( array_map( 'absint', $saved_session_ids ), true );
+        $timezone = isset( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '';
+
+        return $this->compact_gaps( $sessions, $saved_lookup, $timezone );
     }
 
     private function compact_gaps( array $sessions, array $saved_lookup, string $timezone ): array {
@@ -324,6 +384,32 @@ class RestController {
         }
 
         return $gaps;
+    }
+
+    private function get_schedule_days( array $schedule ): array {
+        $sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [];
+        $timezone = isset( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '';
+        $first_sessions_by_day = [];
+        $last_sessions_by_day = [];
+
+        foreach ( $sessions as $session ) {
+            if ( empty( $session['start'] ) ) {
+                continue;
+            }
+
+            $day_key = $this->get_schedule_day_key( (int) $session['start'], $timezone );
+            if ( empty( $first_sessions_by_day[ $day_key ] ) || (int) $session['start'] < (int) $first_sessions_by_day[ $day_key ]['start'] ) {
+                $first_sessions_by_day[ $day_key ] = $session;
+            }
+
+            $session_end = ! empty( $session['end'] ) ? (int) $session['end'] : (int) $session['start'];
+            $last_session_end = ! empty( $last_sessions_by_day[ $day_key ]['end'] ) ? (int) $last_sessions_by_day[ $day_key ]['end'] : 0;
+            if ( empty( $last_sessions_by_day[ $day_key ] ) || $session_end > $last_session_end ) {
+                $last_sessions_by_day[ $day_key ] = $session;
+            }
+        }
+
+        return $this->compact_days( $first_sessions_by_day, $last_sessions_by_day );
     }
 
     private function compact_days( array $first_sessions_by_day, array $last_sessions_by_day ): array {

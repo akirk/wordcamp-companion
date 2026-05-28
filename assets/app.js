@@ -9,11 +9,13 @@
         pickerOpen: true,
         loadingEvents: false,
         loadingSchedule: false,
+        loadingGapKey: '',
+        openGapKey: '',
         savingEvent: false,
         savingSessionId: null,
         debugOffsetSeconds: 0,
         debugPlaying: false,
-        debugRate: 60,
+        debugRate: 300,
         debugLastTick: null,
         alert: null,
     };
@@ -223,11 +225,40 @@
                     refresh: refresh ? '1' : '0',
                 },
             });
+            state.loadingGapKey = '';
+            state.openGapKey = '';
         } catch (error) {
             state.schedule = null;
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.loadingSchedule = false;
+            render();
+        }
+    }
+
+    async function loadGapCandidates(gapKey) {
+        if (!state.selectedEventUrl || !state.schedule || state.schedule.gaps_loaded || state.loadingGapKey) {
+            return;
+        }
+
+        state.loadingGapKey = gapKey || 'all';
+        render();
+
+        try {
+            const data = await api('gap-candidates', {
+                query: {
+                    event_url: state.selectedEventUrl,
+                    refresh: '0',
+                },
+            });
+            state.schedule.gaps = Array.isArray(data.gaps) ? data.gaps : [];
+            state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
+            state.schedule.gaps_loaded = true;
+            state.alert = null;
+        } catch (error) {
+            state.alert = { type: 'error', message: error.message };
+        } finally {
+            state.loadingGapKey = '';
             render();
         }
     }
@@ -681,9 +712,14 @@
         }
 
         const wrapper = element('div', { className: 'wcc-companion' });
-        visibleSteps.slice(0, 10).forEach(function (step, index) {
-            wrapper.append(renderCompanionStep(step, now, index));
-        });
+        const primaryStep = visibleSteps[0];
+        const queue = visibleSteps.slice(1, 3);
+
+        wrapper.append(renderCompanionStep(primaryStep, now, 0));
+
+        if (queue.length) {
+            wrapper.append(renderCompanionQueue(queue, now));
+        }
 
         nodes.schedule.append(wrapper);
     }
@@ -694,6 +730,7 @@
             className: [
                 'wcc-companion-step',
                 'is-' + step.type,
+                index === 0 ? 'is-primary' : '',
                 isCurrent ? 'is-current' : '',
                 index === 0 && !isCurrent ? 'is-next' : '',
             ].filter(Boolean).join(' '),
@@ -725,8 +762,8 @@
             body.append(element('div', { className: 'wcc-companion-meta', text: step.session.speaker_names.join(', ') }));
         }
 
-        if (step.candidates && step.candidates.length) {
-            body.append(renderGapCandidates(step.candidates));
+        if (step.type === 'gap') {
+            body.append(renderGapPicker(step));
         }
 
         const timing = formatCompanionTiming(step, now, timeZone, index);
@@ -737,6 +774,94 @@
         item.append(marker, body);
 
         return item;
+    }
+
+    function renderCompanionQueue(steps, now) {
+        const wrapper = element('div', { className: 'wcc-companion-queue' });
+        wrapper.append(element('div', { className: 'wcc-companion-queue-label', text: 'After this' }));
+
+        steps.forEach(function (step) {
+            wrapper.append(renderCompanionQueueStep(step, now));
+        });
+
+        return wrapper;
+    }
+
+    function renderCompanionQueueStep(step, now) {
+        const timeZone = getSelectedTimezone();
+        const item = element('article', {
+            className: 'wcc-companion-queue-step is-' + step.type,
+        });
+        const body = element('div', { className: 'wcc-companion-queue-body' });
+        const detail = getCompanionQueueDetail(step, now, timeZone);
+
+        body.append(element('strong', { text: step.title }));
+
+        if (detail) {
+            body.append(element('span', { text: detail }));
+        }
+
+        item.append(
+            element('div', {
+                className: 'wcc-companion-queue-time',
+                text: formatQueueStepTime(step, now, timeZone),
+            }),
+            element('div', { className: 'wcc-companion-queue-marker' }),
+            body
+        );
+
+        if (step.type === 'gap') {
+            item.append(renderGapPicker(step));
+        }
+
+        return item;
+    }
+
+    function getCompanionQueueDetail(step, now, timeZone) {
+        if (step.type === 'track') {
+            if (isCompanionStepCurrent(step, now) && step.end) {
+                return 'Be there in ' + formatHumanDuration(step.end - now);
+            }
+
+            return step.start && step.end ? formatRelativeDuration(step.end - step.start) + ' before session' : '';
+        }
+
+        if (step.type === 'session') {
+            return [step.detail, step.session ? formatSessionTime(step.session, timeZone) : step.meta].filter(Boolean).join(' / ');
+        }
+
+        if (step.type === 'break' && step.start && step.end) {
+            return formatDuration(step.end - step.start);
+        }
+
+        if (step.type === 'gap') {
+            return 'Add a session';
+        }
+
+        return step.meta || step.detail || '';
+    }
+
+    function formatQueueStepTime(step, now, timeZone) {
+        if (!step.start) {
+            return 'TBD';
+        }
+
+        const dayDistance = getCalendarDayDistance(step.start, now, timeZone);
+        const time = formatTimeOnly(step.start, timeZone);
+
+        if (dayDistance === 0) {
+            return time;
+        }
+
+        if (dayDistance === 1) {
+            return 'Tomorrow ' + time;
+        }
+
+        return formatDate(step.start, {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+        }, timeZone);
     }
 
     function renderMapLinks(links) {
@@ -754,41 +879,99 @@
         return wrapper;
     }
 
-    function renderGapCandidates(candidates) {
-        const list = element('div', { className: 'wcc-gap-candidates' });
+    function renderGapPicker(step) {
+        const candidates = Array.isArray(step.candidates) ? step.candidates : [];
+        const gapKey = getGapKey(step);
+        const details = element('details', { className: 'wcc-gap-picker' });
         const timeZone = getSelectedTimezone();
+        const groups = groupGapCandidatesByTrack(candidates);
 
-        candidates.forEach(function (session) {
-            const item = element('article', { className: 'wcc-gap-candidate' });
-            const body = element('div');
-            const save = element('button', {
-                className: 'wcc-session-toggle',
-                type: 'button',
-                text: state.savingSessionId === session.id ? 'Saving...' : 'Save',
-            });
+        if (state.openGapKey === gapKey) {
+            details.open = true;
+        }
 
-            body.append(element('strong', { text: session.title || 'Untitled session' }));
-
-            if (getPrimaryTrack(session)) {
-                body.append(element('span', { text: getPrimaryTrack(session) }));
+        details.append(element('summary', { className: 'wcc-gap-toggle', text: 'Add a session' }));
+        details.addEventListener('toggle', function () {
+            if (details.open) {
+                state.openGapKey = gapKey;
+                if (!candidates.length && !state.schedule.gaps_loaded) {
+                    loadGapCandidates(gapKey);
+                }
+            } else if (state.openGapKey === gapKey) {
+                state.openGapKey = '';
             }
-
-            body.append(element('span', { text: formatSessionTime(session, timeZone) }));
-
-            if (session.speaker_names && session.speaker_names.length) {
-                body.append(element('span', { text: session.speaker_names.join(', ') }));
-            }
-
-            save.disabled = state.savingSessionId !== null;
-            save.addEventListener('click', function () {
-                toggleSession(session.id);
-            });
-
-            item.append(body, save);
-            list.append(item);
         });
 
-        return list;
+        if (!candidates.length) {
+            details.append(element('div', {
+                className: 'wcc-gap-empty',
+                text: state.loadingGapKey === gapKey ? 'Loading sessions...' : (state.schedule && state.schedule.gaps_loaded ? 'No sessions fit here.' : 'Open to load sessions.'),
+            }));
+
+            return details;
+        }
+
+        const columns = element('div', { className: 'wcc-gap-columns' });
+
+        groups.forEach(function (group) {
+            const column = element('section', { className: 'wcc-gap-column' });
+            column.append(element('h4', { text: group.track }));
+
+            group.sessions.forEach(function (session) {
+                const button = element('button', {
+                    className: 'wcc-gap-candidate',
+                    type: 'button',
+                });
+                const meta = [formatSessionTime(session, timeZone)];
+
+                if (session.speaker_names && session.speaker_names.length) {
+                    meta.push(session.speaker_names.join(', '));
+                }
+
+                button.append(
+                    element('strong', {
+                        text: state.savingSessionId === session.id ? 'Saving...' : (session.title || 'Untitled session'),
+                    }),
+                    element('span', { text: meta.join(' / ') })
+                );
+                button.disabled = state.savingSessionId !== null;
+                button.addEventListener('click', function () {
+                    toggleSession(session.id);
+                });
+                column.append(button);
+            });
+
+            columns.append(column);
+        });
+
+        details.append(columns);
+
+        return details;
+    }
+
+    function getGapKey(step) {
+        return [step.dayKey || '', step.start || 0, step.end || 0].join(':');
+    }
+
+    function groupGapCandidatesByTrack(candidates) {
+        const groups = new Map();
+
+        candidates.slice().sort(compareSessions).forEach(function (session) {
+            const track = getPrimaryTrack(session) || 'Sessions';
+
+            if (!groups.has(track)) {
+                groups.set(track, []);
+            }
+
+            groups.get(track).push(session);
+        });
+
+        return Array.from(groups.entries()).map(function (entry) {
+            return {
+                track: entry[0],
+                sessions: entry[1],
+            };
+        });
     }
 
     function getCompanionStepLabel(step, now, index, timeLabel) {
@@ -906,14 +1089,19 @@
                 });
             });
 
-            getGapsForDay(group.key).forEach(function (gap) {
+            const loadedGaps = getGapsForDay(group.key);
+            const gaps = loadedGaps.length || state.schedule.gaps_loaded
+                ? loadedGaps
+                : getLazyGapsForDay(daySessions, savedIds, group.key);
+
+            gaps.forEach(function (gap) {
                 steps.push({
                     type: 'gap',
                     dayKey: group.key,
                     start: gap.start,
                     end: gap.end,
                     title: 'Open time',
-                    detail: 'Sessions that fit here',
+                    detail: '',
                     meta: formatSessionTime(gap, timeZone),
                     candidates: gap.candidates || [],
                 });
@@ -1089,29 +1277,41 @@
     }
 
     function setDebugTimeToWordCampStart() {
-        const start = getFirstArrivalStart();
+        const start = getFirstWordCampStart();
         const event = getSelectedEvent();
 
         if (!start && (!event || !event.start)) {
             return;
         }
 
-        state.debugOffsetSeconds = Number(start || event.start) - Math.floor(Date.now() / 1000);
+        state.debugOffsetSeconds = Number(start || event.start) - 60 * 60 - Math.floor(Date.now() / 1000);
         state.debugLastTick = Date.now();
         render();
     }
 
-    function getFirstArrivalStart() {
+    function getFirstWordCampStart() {
+        if (state.schedule && state.schedule.days && typeof state.schedule.days === 'object') {
+            const starts = Object.keys(state.schedule.days).map(function (key) {
+                return Number(state.schedule.days[key].start || 0);
+            }).filter(function (start) {
+                return start > 0;
+            });
+
+            if (starts.length) {
+                return Math.min.apply(null, starts);
+            }
+        }
+
         const timeline = buildCompanionTimeline();
         const arrival = timeline.steps.find(function (step) {
             return step.type === 'arrival';
         });
 
-        if (!arrival || !arrival.start) {
+        if (!arrival || !arrival.dayStart && !arrival.start) {
             return null;
         }
 
-        return Number(arrival.start);
+        return Number(arrival.dayStart || arrival.start);
     }
 
     function isCompanionStepPast(step, now) {
@@ -1531,6 +1731,31 @@
         return state.schedule.gaps.filter(function (gap) {
             return gap.day_key === dayKey;
         });
+    }
+
+    function getLazyGapsForDay(sessions, savedIds, dayKey) {
+        const savedSessions = sessions.filter(function (session) {
+            return savedIds.has(session.id) && session.type !== 'custom' && session.start;
+        }).sort(compareSessions);
+        const gaps = [];
+
+        for (let index = 0; index < savedSessions.length - 1; index++) {
+            const current = savedSessions[index];
+            const next = savedSessions[index + 1];
+            const gapStart = current.end || current.start;
+            const gapEnd = next.start;
+
+            if (gapEnd - gapStart >= 15 * 60) {
+                gaps.push({
+                    day_key: dayKey,
+                    start: gapStart,
+                    end: gapEnd,
+                    candidates: [],
+                });
+            }
+        }
+
+        return gaps;
     }
 
     function getConflictsForSession(session, savedIds) {
