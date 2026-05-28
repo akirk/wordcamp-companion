@@ -50,8 +50,13 @@ class App extends BaseApp {
 
     protected function setup_menu(): void {
         $this->app->add_menu_item(
-            'wordcamp-companion',
-            'WordCamp Companion',
+            'wordcamp-companion-home',
+            'companion',
+            home_url( '/' . $this->get_url_path() . '/' )
+        );
+        $this->app->add_menu_item(
+            'wordcamp-companion-wordcamps',
+            'wordcamps',
             home_url( '/' . $this->get_url_path() . '/plan-your/' )
         );
     }

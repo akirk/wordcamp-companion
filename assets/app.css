@@ -354,6 +354,37 @@ a:focus-visible {
     font-size: 1rem;
 }
 
+.wcc-plan-selector {
+    padding: 18px;
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
+}
+
+.wcc-plan-selector-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.wcc-plan-selector-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.wcc-plan-selector h2,
+.wcc-plan-selector p {
+    margin: 0;
+}
+
+.wcc-plan-selector p {
+    margin-top: 4px;
+    color: var(--wcc-muted);
+}
+
 .wcc-count {
     color: var(--wcc-muted);
     font-size: 0.86rem;
@@ -362,6 +393,11 @@ a:focus-visible {
 .wcc-event-list {
     display: grid;
     gap: 8px;
+}
+
+.wcc-event-list-wide {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 12px;
 }
 
 .wcc-event-card {
@@ -1117,6 +1153,26 @@ a:focus-visible {
     border-radius: 8px;
 }
 
+.wcc-empty h1,
+.wcc-empty p {
+    margin: 0;
+}
+
+.wcc-empty h1 {
+    font-size: 1.3rem;
+    line-height: 1.2;
+}
+
+.wcc-empty p {
+    margin-top: 8px;
+}
+
+.wcc-empty-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
 .wcc-build {
     margin-top: 18px;
     color: var(--wcc-muted);
@@ -1145,6 +1201,7 @@ a:focus-visible {
     .wcc-header,
     .wcc-selected-event,
     .wcc-picker,
+    .wcc-plan-selector-header,
     .wcc-planner-nav {
         display: grid;
         grid-template-columns: 1fr;

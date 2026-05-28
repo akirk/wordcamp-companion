@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.31';
+    const SCRIPT_BUILD = '20260528.35';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -148,7 +148,7 @@
             });
         }
 
-        if (nodes.changeEvent) {
+        if (nodes.changeEvent && nodes.changeEvent.tagName.toLowerCase() === 'button') {
             nodes.changeEvent.addEventListener('click', function () {
                 state.pickerOpen = true;
                 render();
@@ -690,7 +690,7 @@
         const conflictCount = getConflictCount(savedIds);
 
         if (state.page === 'plan-selector') {
-            nodes.currentEvent.textContent = 'Choose the next WordCamp you want to plan.';
+            nodes.currentEvent.textContent = 'Choose the next WordCamp you are planning to attend.';
             nodes.planSummary.textContent = '';
             return;
         }
@@ -749,7 +749,7 @@
         if (!events.length) {
             fragment.append(element('option', { value: '', text: state.loadingEvents ? 'Loading WordCamps...' : 'No scheduled WordCamps' }));
         } else {
-            fragment.append(element('option', { value: '', text: 'Select a WordCamp' }));
+            fragment.append(element('option', { value: '', text: 'Select a WordCamp to attend' }));
             events.forEach(function (event) {
                 fragment.append(element('option', {
                     value: event.event_url,
@@ -821,13 +821,21 @@
     }
 
     function renderSchedule() {
+        if (!nodes.status || !nodes.schedule) {
+            return;
+        }
+
         nodes.status.textContent = '';
         nodes.schedule.replaceChildren();
 
         if (!state.selectedEventUrl) {
-            const empty = element('div', { className: 'wcc-empty' });
-            empty.append(element('p', { text: state.page === 'plan-selector' ? 'Choose a WordCamp to plan your day.' : 'Select a WordCamp.' }));
-            nodes.schedule.append(empty);
+            if (state.page === 'companion') {
+                nodes.schedule.append(renderEmptyCompanion());
+            } else {
+                const empty = element('div', { className: 'wcc-empty' });
+                empty.append(element('p', { text: state.page === 'plan-selector' ? 'Choose a WordCamp you are planning to attend.' : 'Select a WordCamp.' }));
+                nodes.schedule.append(empty);
+            }
             return;
         }
 
@@ -1038,6 +1046,26 @@
         nodes.schedule.append(wrapper);
     }
 
+    function renderEmptyCompanion() {
+        const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
+        empty.append(
+            element('h1', { text: 'No WordCamp selected' }),
+            element('p', { text: 'Choose the WordCamp you are planning to attend to start your companion timeline.' }),
+            element('p', {
+                className: 'wcc-empty-actions',
+                children: [
+                    element('a', {
+                        className: 'wcc-button',
+                        href: getPlanYourDayUrl(null),
+                        text: 'wordcamps',
+                    }),
+                ],
+            })
+        );
+
+        return empty;
+    }
+
     function getRenderableCompanionSteps(visibleSteps) {
         const defaultLimit = 4;
         const sessionIndex = visibleSteps.findIndex(function (step) {
@@ -1145,7 +1173,7 @@
     function renderCompanionTopLink() {
         const wrapper = element('div', { className: 'wcc-companion-top' });
         const selectedEvent = getSelectedEvent();
-        const events = getRenderableEvents();
+        const events = getAttendingEvents();
         const switcher = element('label', { className: 'wcc-companion-switcher' });
         const select = element('select', { 'aria-label': 'Switch WordCamp' });
         const planButton = element('a', {
@@ -1156,13 +1184,13 @@
         const addButton = element('a', {
             className: 'wcc-plan-link',
             href: getPlanYourDayUrl(null),
-            text: 'Add WordCamp',
+            text: 'Attend WordCamp',
         });
 
         switcher.append(element('span', { text: 'WordCamp' }));
 
         if (!events.length) {
-            select.append(element('option', { value: '', text: state.loadingEvents ? 'Loading...' : 'No WordCamps' }));
+            select.append(element('option', { value: '', text: state.loadingEvents ? 'Loading...' : 'No WordCamps yet' }));
             select.disabled = true;
         } else {
             events.forEach(function (event) {
@@ -2536,6 +2564,30 @@
         }
 
         return events;
+    }
+
+    function getAttendingEvents() {
+        const events = [];
+        const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
+
+        Object.keys(plans).forEach(function (eventUrl) {
+            const event = plans[eventUrl] && plans[eventUrl].event ? plans[eventUrl].event : null;
+
+            if (event && event.event_url && !events.some(function (existing) {
+                return existing.event_url === event.event_url;
+            })) {
+                events.push(event);
+            }
+        });
+
+        if (!events.length) {
+            const selectedEvent = getSelectedEvent();
+            if (selectedEvent && selectedEvent.event_url) {
+                events.push(selectedEvent);
+            }
+        }
+
+        return events.sort(compareEvents);
     }
 
     function getEventByUrl(eventUrl) {

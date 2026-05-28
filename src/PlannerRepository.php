@@ -91,35 +91,13 @@ class PlannerRepository {
         }
 
         $event_url = $event['event_url'];
-        $saved_sessions = $this->get_saved_session_posts( $user_id, $term_id );
-        $saved_session_ids = array_values(
-            array_filter(
-                array_map(
-                    function ( array $session ): int {
-                        return absint( $session['session_id'] ?? 0 );
-                    },
-                    $saved_sessions
-                )
-            )
-        );
-        $updated_at = 0;
-        foreach ( $saved_sessions as $session ) {
-            $updated_at = max( $updated_at, absint( $session['updated_at'] ?? 0 ) );
-        }
+        $plans = $this->get_attending_plans( $user_id, $term_id );
 
         return [
             'selected_event_url'      => $event_url,
             'selected_wordcamp_term_id' => $term_id,
-            'saved_session_posts'     => $saved_sessions,
-            'plans'                   => [
-                $event_url => [
-                    'event'             => $event,
-                    'wordcamp_term_id'  => $term_id,
-                    'saved_session_ids' => $saved_session_ids,
-                    'saved_sessions'    => $saved_sessions,
-                    'updated_at'        => $updated_at,
-                ],
-            ],
+            'saved_session_posts'     => $plans[ $event_url ]['saved_sessions'] ?? [],
+            'plans'                   => $plans,
         ];
     }
 
@@ -394,6 +372,85 @@ class PlannerRepository {
         $decoded = json_decode( $raw_days, true );
 
         return is_array( $decoded ) ? $this->sanitize_schedule_days( $decoded ) : [];
+    }
+
+    private function get_attending_plans( int $user_id, int $selected_term_id ): array {
+        $term_ids = [ $selected_term_id ];
+        $saved_term_ids = $this->get_saved_wordcamp_term_ids( $user_id );
+
+        foreach ( $saved_term_ids as $term_id ) {
+            if ( ! in_array( $term_id, $term_ids, true ) ) {
+                $term_ids[] = $term_id;
+            }
+        }
+
+        $plans = [];
+        foreach ( $term_ids as $term_id ) {
+            if ( ! $term_id || ! term_exists( $term_id, self::TAXONOMY ) ) {
+                continue;
+            }
+
+            $event = $this->get_event_from_term( $term_id );
+            if ( empty( $event['event_url'] ) ) {
+                continue;
+            }
+
+            $saved_sessions = $this->get_saved_session_posts( $user_id, $term_id );
+            $saved_session_ids = array_values(
+                array_filter(
+                    array_map(
+                        function ( array $session ): int {
+                            return absint( $session['session_id'] ?? 0 );
+                        },
+                        $saved_sessions
+                    )
+                )
+            );
+            $updated_at = 0;
+            foreach ( $saved_sessions as $session ) {
+                $updated_at = max( $updated_at, absint( $session['updated_at'] ?? 0 ) );
+            }
+
+            $plans[ $event['event_url'] ] = [
+                'event'             => $event,
+                'wordcamp_term_id'  => $term_id,
+                'saved_session_ids' => $saved_session_ids,
+                'saved_sessions'    => $saved_sessions,
+                'updated_at'        => $updated_at,
+            ];
+        }
+
+        return $plans;
+    }
+
+    private function get_saved_wordcamp_term_ids( int $user_id ): array {
+        $query = new WP_Query(
+            [
+                'post_type'      => self::POST_TYPE,
+                'post_status'    => [ 'publish', 'private' ],
+                'author'         => $user_id,
+                'posts_per_page' => -1,
+                'fields'         => 'ids',
+                'tax_query'      => [
+                    [
+                        'taxonomy' => self::TAXONOMY,
+                        'operator' => 'EXISTS',
+                    ],
+                ],
+            ]
+        );
+        $term_ids = [];
+
+        foreach ( array_map( 'absint', $query->posts ) as $post_id ) {
+            foreach ( wp_get_object_terms( $post_id, self::TAXONOMY, [ 'fields' => 'ids' ] ) as $term_id ) {
+                $term_id = absint( $term_id );
+                if ( $term_id && ! in_array( $term_id, $term_ids, true ) ) {
+                    $term_ids[] = $term_id;
+                }
+            }
+        }
+
+        return $term_ids;
     }
 
     private function sanitize_schedule_days( array $days ): array {
