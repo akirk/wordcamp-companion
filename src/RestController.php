@@ -352,6 +352,7 @@ class RestController {
         $gaps = [];
 
         foreach ( $saved_by_day as $day_key => $saved_sessions ) {
+            $day_sessions = $sessions_by_day[ $day_key ] ?? [];
             usort(
                 $saved_sessions,
                 function ( array $a, array $b ): int {
@@ -359,40 +360,71 @@ class RestController {
                 }
             );
 
+            usort(
+                $day_sessions,
+                function ( array $a, array $b ): int {
+                    return ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
+                }
+            );
+
+            $first_saved_start = (int) $saved_sessions[0]['start'];
+            $day_start = ! empty( $day_sessions[0]['start'] ) ? (int) $day_sessions[0]['start'] : $first_saved_start;
+            $arrival_start = max( $day_start, $first_saved_start - 2 * HOUR_IN_SECONDS );
+            $this->append_compact_gap(
+                $gaps,
+                $day_key,
+                $arrival_start,
+                max( $arrival_start, $first_saved_start - 10 * MINUTE_IN_SECONDS ),
+                $day_sessions,
+                $saved_lookup
+            );
+
             for ( $index = 0; $index < count( $saved_sessions ) - 1; $index++ ) {
                 $gap_start = ! empty( $saved_sessions[ $index ]['end'] ) ? (int) $saved_sessions[ $index ]['end'] : (int) $saved_sessions[ $index ]['start'];
                 $gap_end = max( $gap_start, (int) $saved_sessions[ $index + 1 ]['start'] - 10 * MINUTE_IN_SECONDS );
 
-                if ( $gap_end - $gap_start < 15 * MINUTE_IN_SECONDS ) {
-                    continue;
-                }
-
-                $candidates = [];
-                foreach ( $sessions_by_day[ $day_key ] ?? [] as $session ) {
-                    if ( empty( $session['id'] ) || isset( $saved_lookup[ (int) $session['id'] ] ) || ! empty( $session['type'] ) && 'custom' === $session['type'] ) {
-                        continue;
-                    }
-
-                    $session_start = (int) $session['start'];
-                    $session_end = ! empty( $session['end'] ) ? (int) $session['end'] : $session_start;
-
-                    if ( $session_start >= $gap_start && $session_end <= $gap_end ) {
-                        $candidates[] = $this->compact_session( $session );
-                    }
-                }
-
-                if ( $candidates ) {
-                    $gaps[] = [
-                        'day_key'    => $day_key,
-                        'start'      => $gap_start,
-                        'end'        => $gap_end,
-                        'candidates' => $candidates,
-                    ];
-                }
+                $this->append_compact_gap( $gaps, $day_key, $gap_start, $gap_end, $day_sessions, $saved_lookup );
             }
+
+            $last_saved = $saved_sessions[ count( $saved_sessions ) - 1 ];
+            $last_saved_end = ! empty( $last_saved['end'] ) ? (int) $last_saved['end'] : (int) $last_saved['start'];
+            $last_day_session = $day_sessions ? $day_sessions[ count( $day_sessions ) - 1 ] : $last_saved;
+            $day_end = ! empty( $last_day_session['end'] ) ? (int) $last_day_session['end'] : (int) $last_day_session['start'];
+            $this->append_compact_gap( $gaps, $day_key, $last_saved_end, max( $last_saved_end, $day_end ), $day_sessions, $saved_lookup );
         }
 
         return $gaps;
+    }
+
+    private function append_compact_gap( array &$gaps, string $day_key, int $gap_start, int $gap_end, array $day_sessions, array $saved_lookup ): void {
+        if ( $gap_end - $gap_start < 15 * MINUTE_IN_SECONDS ) {
+            return;
+        }
+
+        $candidates = [];
+        foreach ( $day_sessions as $session ) {
+            if ( empty( $session['id'] ) || isset( $saved_lookup[ (int) $session['id'] ] ) || ! empty( $session['type'] ) && 'custom' === $session['type'] ) {
+                continue;
+            }
+
+            $session_start = (int) $session['start'];
+            $session_end = ! empty( $session['end'] ) ? (int) $session['end'] : $session_start;
+
+            if ( $session_start >= $gap_start && $session_end <= $gap_end ) {
+                $candidates[] = $this->compact_session( $session );
+            }
+        }
+
+        if ( ! $candidates ) {
+            return;
+        }
+
+        $gaps[] = [
+            'day_key'    => $day_key,
+            'start'      => $gap_start,
+            'end'        => $gap_end,
+            'candidates' => $candidates,
+        ];
     }
 
     private function get_schedule_days( array $schedule ): array {

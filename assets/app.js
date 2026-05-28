@@ -1122,7 +1122,7 @@
                     dayKey: group.key,
                     start: gap.start,
                     end: gap.end,
-                    title: 'Open time',
+                    title: 'Add a session',
                     detail: '',
                     meta: formatSessionTime(gap, timeZone),
                     candidates: gap.candidates || [],
@@ -1753,23 +1753,40 @@
         }).sort(compareSessions);
         const gaps = [];
 
+        if (!savedSessions.length) {
+            return gaps;
+        }
+
+        const dayStart = getDayStart(dayKey) || savedSessions[0].start;
+        const arrivalStart = Math.max(dayStart, savedSessions[0].start - 2 * 60 * 60);
+        addLazyGap(gaps, dayKey, arrivalStart, Math.max(arrivalStart, savedSessions[0].start - 10 * 60));
+
         for (let index = 0; index < savedSessions.length - 1; index++) {
             const current = savedSessions[index];
             const next = savedSessions[index + 1];
             const gapStart = current.end || current.start;
             const gapEnd = Math.max(gapStart, next.start - 10 * 60);
 
-            if (gapEnd - gapStart >= 15 * 60) {
-                gaps.push({
-                    day_key: dayKey,
-                    start: gapStart,
-                    end: gapEnd,
-                    candidates: [],
-                });
-            }
+            addLazyGap(gaps, dayKey, gapStart, gapEnd);
         }
 
+        const lastSaved = savedSessions[savedSessions.length - 1];
+        addLazyGap(gaps, dayKey, lastSaved.end || lastSaved.start, getDayEnd(dayKey) || lastSaved.end || lastSaved.start);
+
         return gaps;
+    }
+
+    function addLazyGap(gaps, dayKey, start, end) {
+        if (end - start < 15 * 60) {
+            return;
+        }
+
+        gaps.push({
+            day_key: dayKey,
+            start: start,
+            end: end,
+            candidates: [],
+        });
     }
 
     function getConflictsForSession(session, savedIds) {
