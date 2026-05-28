@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.26';
+    const SCRIPT_BUILD = '20260528.27';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1150,6 +1150,10 @@
         const marker = element('div', { className: 'wcc-companion-marker' });
         const body = element('div', { className: 'wcc-companion-body' });
 
+        if (isCurrent && step.type === 'session') {
+            item.style.setProperty('--wcc-step-progress', getCompanionStepProgress(step, now) + '%');
+        }
+
         if (!isGap) {
             const heading = element('div', { className: 'wcc-companion-heading' });
             heading.append(element('h3', { text: step.title }));
@@ -1197,6 +1201,17 @@
         item.append(marker, body);
 
         return item;
+    }
+
+    function getCompanionStepProgress(step, now) {
+        const start = Number(step && step.start || 0);
+        const end = Number(step && (step.end || step.start) || 0);
+
+        if (!start || !end || end <= start) {
+            return 0;
+        }
+
+        return Math.max(0, Math.min(100, Math.round(((now - start) / (end - start)) * 1000) / 10));
     }
 
     function renderCompanionChoices(alternatives, timeZone) {

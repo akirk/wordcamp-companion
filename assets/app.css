@@ -484,6 +484,21 @@ a:focus-visible {
     box-shadow: inset 3px 0 0 var(--wcc-primary);
 }
 
+.wcc-companion-step.is-session.is-current {
+    overflow: hidden;
+}
+
+.wcc-companion-step.is-session.is-current::after {
+    content: "";
+    position: absolute;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    width: var(--wcc-step-progress, 0%);
+    height: 3px;
+    background: var(--wcc-primary);
+}
+
 .wcc-companion-step.is-next {
     border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 45%);
 }

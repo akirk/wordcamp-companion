@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'WORDCAMP_COMPANION_VERSION', '1.0.1' );
-define( 'WORDCAMP_COMPANION_ASSET_VERSION', '20260528.26' );
+define( 'WORDCAMP_COMPANION_ASSET_VERSION', '20260528.27' );
 
 require_once __DIR__ . '/vendor/autoload.php';
 
