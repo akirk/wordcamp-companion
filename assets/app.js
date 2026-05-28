@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.39';
+    const SCRIPT_BUILD = '20260528.40';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -703,7 +703,7 @@
         }
 
         if (state.page === 'plan-selector') {
-            nodes.currentEvent.textContent = 'Choose the next WordCamp you are planning to attend.';
+            nodes.currentEvent.textContent = '';
             nodes.planSummary.textContent = '';
             return;
         }

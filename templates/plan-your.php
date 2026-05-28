@@ -13,7 +13,7 @@
         <header class="wcc-header">
             <div>
                 <h1><?php echo esc_html__( 'Plan your WordCamp', 'wordcamp-companion' ); ?></h1>
-                <p id="wcc-current-event" class="wcc-current-event"><?php echo esc_html__( 'Choose the next WordCamp you are planning to attend.', 'wordcamp-companion' ); ?></p>
+                <p id="wcc-current-event" class="wcc-current-event" hidden></p>
             </div>
             <div id="wcc-plan-summary" class="wcc-plan-summary"></div>
         </header>
@@ -27,7 +27,6 @@
                         <h2><?php echo esc_html__( 'Upcoming WordCamps', 'wordcamp-companion' ); ?></h2>
                         <span id="wcc-event-count" class="wcc-count"></span>
                     </div>
-                    <p><?php echo esc_html__( 'Select the WordCamp you are planning to attend.', 'wordcamp-companion' ); ?></p>
                 </div>
                 <div class="wcc-actions">
                     <a class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/' ) ); ?>"><?php echo esc_html__( 'Companion', 'wordcamp-companion' ); ?></a>
