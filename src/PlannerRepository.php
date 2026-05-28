@@ -319,7 +319,7 @@ class PlannerRepository {
         }
 
         update_term_meta( $term_id, self::EVENT_URL_META_KEY, $event_url );
-        update_term_meta( $term_id, self::EVENT_META_KEY, wp_json_encode( $event ) );
+        update_term_meta( $term_id, self::EVENT_META_KEY, wp_slash( wp_json_encode( $event, JSON_UNESCAPED_UNICODE ) ) );
 
         return $term_id;
     }
@@ -556,8 +556,7 @@ class PlannerRepository {
                 )
             )
         );
-
-        return sanitize_textarea_field(
+        $structured_address = sanitize_textarea_field(
             implode(
                 "\n",
                 array_filter(
@@ -570,5 +569,11 @@ class PlannerRepository {
                 )
             )
         );
+
+        if ( '' !== $structured_address ) {
+            return $structured_address;
+        }
+
+        return '';
     }
 }

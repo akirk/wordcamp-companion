@@ -548,7 +548,12 @@ class WordCampApi {
             isset( $event['_venue_country_name'] ) ? $this->normalize_text( $event['_venue_country_name'] ) : '',
         ];
 
-        return trim( implode( "\n", array_filter( $parts ) ) );
+        $structured_address = trim( implode( "\n", array_filter( $parts ) ) );
+        if ( '' !== $structured_address ) {
+            return $structured_address;
+        }
+
+        return '';
     }
 
     private function normalize_sessions( array $sessions, array $speakers, array $tracks, array $categories ): array {
