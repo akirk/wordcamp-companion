@@ -712,14 +712,9 @@
         }
 
         const wrapper = element('div', { className: 'wcc-companion' });
-        const primaryStep = visibleSteps[0];
-        const queue = visibleSteps.slice(1, 3);
-
-        wrapper.append(renderCompanionStep(primaryStep, now, 0));
-
-        if (queue.length) {
-            wrapper.append(renderCompanionQueue(queue, now));
-        }
+        visibleSteps.slice(0, 4).forEach(function (step, index) {
+            wrapper.append(renderCompanionStep(step, now, index));
+        });
 
         nodes.schedule.append(wrapper);
     }
@@ -774,94 +769,6 @@
         item.append(marker, body);
 
         return item;
-    }
-
-    function renderCompanionQueue(steps, now) {
-        const wrapper = element('div', { className: 'wcc-companion-queue' });
-        wrapper.append(element('div', { className: 'wcc-companion-queue-label', text: 'After this' }));
-
-        steps.forEach(function (step) {
-            wrapper.append(renderCompanionQueueStep(step, now));
-        });
-
-        return wrapper;
-    }
-
-    function renderCompanionQueueStep(step, now) {
-        const timeZone = getSelectedTimezone();
-        const item = element('article', {
-            className: 'wcc-companion-queue-step is-' + step.type,
-        });
-        const body = element('div', { className: 'wcc-companion-queue-body' });
-        const detail = getCompanionQueueDetail(step, now, timeZone);
-
-        body.append(element('strong', { text: step.title }));
-
-        if (detail) {
-            body.append(element('span', { text: detail }));
-        }
-
-        item.append(
-            element('div', {
-                className: 'wcc-companion-queue-time',
-                text: formatQueueStepTime(step, now, timeZone),
-            }),
-            element('div', { className: 'wcc-companion-queue-marker' }),
-            body
-        );
-
-        if (step.type === 'gap') {
-            item.append(renderGapPicker(step));
-        }
-
-        return item;
-    }
-
-    function getCompanionQueueDetail(step, now, timeZone) {
-        if (step.type === 'track') {
-            if (isCompanionStepCurrent(step, now) && step.end) {
-                return 'Be there in ' + formatHumanDuration(step.end - now);
-            }
-
-            return step.start && step.end ? formatRelativeDuration(step.end - step.start) + ' before session' : '';
-        }
-
-        if (step.type === 'session') {
-            return [step.detail, step.session ? formatSessionTime(step.session, timeZone) : step.meta].filter(Boolean).join(' / ');
-        }
-
-        if (step.type === 'break' && step.start && step.end) {
-            return formatDuration(step.end - step.start);
-        }
-
-        if (step.type === 'gap') {
-            return 'Add a session';
-        }
-
-        return step.meta || step.detail || '';
-    }
-
-    function formatQueueStepTime(step, now, timeZone) {
-        if (!step.start) {
-            return 'TBD';
-        }
-
-        const dayDistance = getCalendarDayDistance(step.start, now, timeZone);
-        const time = formatTimeOnly(step.start, timeZone);
-
-        if (dayDistance === 0) {
-            return time;
-        }
-
-        if (dayDistance === 1) {
-            return 'Tomorrow ' + time;
-        }
-
-        return formatDate(step.start, {
-            weekday: 'short',
-            hour: 'numeric',
-            minute: '2-digit',
-        }, timeZone);
     }
 
     function renderMapLinks(links) {
