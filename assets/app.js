@@ -928,16 +928,17 @@
     function formatUpcomingStepLabel(start, now, timeZone) {
         const dayDistance = getCalendarDayDistance(start, now, timeZone);
         const time = formatTimeOnly(start, timeZone);
+        const relative = 'In ' + formatDurationWords(start - now);
 
         if (dayDistance === 0) {
-            return 'Today at ' + time + ' (in ' + formatDurationWords(start - now) + ')';
+            return relative + ' - today at ' + time;
         }
 
         if (dayDistance === 1) {
-            return 'Tomorrow at ' + time + ' (in ' + formatDurationWords(start - now) + ')';
+            return relative + ' - tomorrow at ' + time;
         }
 
-        return 'Next at ' + formatDate(start, {
+        return relative + ' - ' + formatDate(start, {
             weekday: 'short',
             hour: 'numeric',
             minute: '2-digit',
