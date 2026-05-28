@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.15';
+    const SCRIPT_BUILD = '20260528.16';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1249,7 +1249,7 @@
     function formatUpcomingStepLabel(start, now, timeZone) {
         const dayDistance = getCalendarDayDistance(start, now, timeZone);
         const time = formatTimeOnly(start, timeZone);
-        const relative = 'In ' + formatDurationWords(start - now);
+        const relative = dayDistance > 1 ? 'In ' + dayDistance + ' days' : 'In ' + formatDurationWords(start - now);
 
         if (dayDistance === 0) {
             return relative + ' - today at ' + time;
