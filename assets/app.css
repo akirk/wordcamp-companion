@@ -580,6 +580,30 @@ a:focus-visible {
     font-weight: 650;
 }
 
+.wcc-choice-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.wcc-choice-item {
+    display: grid;
+    gap: 3px;
+    padding: 9px 10px;
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
+}
+
+.wcc-choice-item strong {
+    line-height: 1.25;
+}
+
+.wcc-choice-item span {
+    color: var(--wcc-muted);
+    font-size: 0.88rem;
+}
+
 .wcc-companion-step.is-track,
 .wcc-companion-step.is-break,
 .wcc-companion-step.is-day-end,

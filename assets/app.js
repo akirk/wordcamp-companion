@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.9';
+    const SCRIPT_BUILD = '20260528.10';
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -310,13 +310,9 @@
         const savedIds = getSavedSessionIds();
         const wasSaved = savedIds.has(sessionId);
         const localSession = findLocalSession(sessionId);
-        const replacedSessions = !wasSaved && localSession ? getConflictsForSession(localSession, savedIds) : [];
         if (wasSaved) {
             savedIds.delete(sessionId);
         } else {
-            replacedSessions.forEach(function (session) {
-                savedIds.delete(session.id);
-            });
             savedIds.add(sessionId);
         }
 
@@ -333,7 +329,7 @@
             }));
             state.alert = null;
             if (!wasSaved && localSession && state.schedule && state.schedule.mode === 'companion') {
-                addSessionToCompanionSchedule(localSession, replacedSessions);
+                addSessionToCompanionSchedule(localSession);
             } else if (wasSaved && state.schedule && state.schedule.mode === 'companion') {
                 await loadSchedule(true, 'companion');
             }
@@ -483,7 +479,7 @@
 
         const summary = [savedIds.size + ' saved'];
         if (conflictCount > 0) {
-            summary.push(conflictCount + ' conflict' + (conflictCount === 1 ? '' : 's'));
+            summary.push(conflictCount + ' alternative' + (conflictCount === 1 ? '' : 's'));
         }
         nodes.planSummary.textContent = summary.join(' / ');
     }
@@ -756,7 +752,7 @@
         const button = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
-            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Replace' : 'Save')),
+            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Save option' : 'Save')),
         });
 
         if (session.url) {
@@ -783,7 +779,7 @@
         if (conflicts.length) {
             card.append(element('div', {
                 className: 'wcc-conflict',
-                text: 'Replaces ' + conflicts.map(function (conflict) {
+                text: 'Same time as ' + conflicts.map(function (conflict) {
                     return conflict.title;
                 }).join(', '),
             }));
@@ -829,7 +825,7 @@
     function getRenderableCompanionSteps(visibleSteps) {
         const defaultLimit = 4;
         const sessionIndex = visibleSteps.findIndex(function (step) {
-            return step.type === 'session';
+            return step.type === 'session' || step.type === 'choice';
         });
         let limit = Math.min(defaultLimit, visibleSteps.length);
 
@@ -985,6 +981,10 @@
             body.append(element('div', { className: 'wcc-companion-meta', text: step.session.speaker_names.join(', ') }));
         }
 
+        if (step.type === 'choice') {
+            body.append(renderCompanionChoices(step.alternatives || [], timeZone));
+        }
+
         if (step.type === 'gap') {
             body.append(renderGapPicker(step));
         }
@@ -997,6 +997,29 @@
         item.append(marker, body);
 
         return item;
+    }
+
+    function renderCompanionChoices(alternatives, timeZone) {
+        const wrapper = element('div', { className: 'wcc-choice-list' });
+
+        alternatives.forEach(function (session) {
+            const item = element('article', { className: 'wcc-choice-item' });
+            const meta = [getPrimaryTrack(session), formatSessionTime(session, timeZone)].filter(Boolean);
+
+            item.append(element('strong', { text: session.title || 'Untitled session' }));
+
+            if (session.speaker_names && session.speaker_names.length) {
+                meta.push(session.speaker_names.join(', '));
+            }
+
+            if (meta.length) {
+                item.append(element('span', { text: meta.join(' / ') }));
+            }
+
+            wrapper.append(item);
+        });
+
+        return wrapper;
     }
 
     function renderMapLinks(links) {
@@ -1101,7 +1124,7 @@
         }
 
         if (conflicts.length) {
-            meta.push('Replaces ' + conflicts.map(function (conflict) {
+            meta.push('Same time as ' + conflicts.map(function (conflict) {
                 return conflict.title || 'saved session';
             }).join(', '));
         }
@@ -1110,7 +1133,7 @@
             element('strong', {
                 text: state.savingSessionId === session.id
                     ? 'Saving...'
-                    : ((conflicts.length ? 'Replace with ' : '') + (session.title || 'Untitled session')),
+                    : (session.title || 'Untitled session'),
             }),
             element('span', { text: meta.join(' / ') })
         );
@@ -1148,21 +1171,12 @@
         return null;
     }
 
-    function addSessionToCompanionSchedule(session, replacedSessions) {
+    function addSessionToCompanionSchedule(session) {
         if (!state.schedule || !Array.isArray(state.schedule.sessions)) {
             return;
         }
 
         const sessionId = Number(session.id);
-        const replacedIds = new Set((replacedSessions || []).map(function (replacedSession) {
-            return Number(replacedSession.id);
-        }));
-        if (replacedIds.size) {
-            state.schedule.sessions = state.schedule.sessions.filter(function (existing) {
-                return !replacedIds.has(Number(existing.id));
-            });
-        }
-
         const exists = state.schedule.sessions.some(function (existing) {
             return Number(existing.id) === sessionId;
         });
@@ -1354,10 +1368,47 @@
             }
 
             let currentTrack = '';
-            daySessions.forEach(function (session) {
-                const isBreak = session.type === 'custom';
-                const track = isBreak ? '' : getPrimaryTrack(session);
+            getCompanionSessionBlocks(daySessions).forEach(function (block) {
+                if (block.type === 'break') {
+                    steps.push({
+                        type: 'break',
+                        dayKey: group.key,
+                        start: block.start,
+                        end: block.end,
+                        title: block.session.title || 'Break',
+                        detail: '',
+                        meta: formatSessionTime(block.session, timeZone),
+                        session: block.session,
+                    });
+                    return;
+                }
 
+                if (block.type === 'choice') {
+                    steps.push({
+                        type: 'track',
+                        dayKey: group.key,
+                        start: Math.max(0, block.start - 10 * 60),
+                        end: block.start,
+                        title: 'Choose where to go',
+                        detail: getChoiceTrackSummary(block.sessions),
+                        meta: '',
+                    });
+                    steps.push({
+                        type: 'choice',
+                        dayKey: group.key,
+                        start: block.start,
+                        end: block.end,
+                        title: 'Choose one session',
+                        detail: '',
+                        meta: formatSessionTime(block, timeZone),
+                        alternatives: block.sessions,
+                    });
+                    currentTrack = '';
+                    return;
+                }
+
+                const session = block.session;
+                const track = getPrimaryTrack(session);
                 if (track && track !== currentTrack) {
                     steps.push({
                         type: 'track',
@@ -1370,14 +1421,13 @@
                     });
                     currentTrack = track;
                 }
-
                 steps.push({
-                    type: isBreak ? 'break' : 'session',
+                    type: 'session',
                     dayKey: group.key,
                     start: session.start,
                     end: session.end || session.start + Math.max(0, Number(session.duration || 0)),
                     title: session.title || 'Untitled session',
-                    detail: isBreak ? '' : getPrimaryTrack(session),
+                    detail: getPrimaryTrack(session),
                     meta: formatSessionTime(session, timeZone),
                     session: session,
                 });
@@ -1435,6 +1485,77 @@
             steps: steps,
             hasSavedSessions: Boolean(savedSessions.length),
         };
+    }
+
+    function getCompanionSessionBlocks(sessions) {
+        const customBlocks = sessions.filter(function (session) {
+            return session.type === 'custom';
+        }).map(function (session) {
+            return {
+                type: 'break',
+                start: session.start,
+                end: session.end || session.start,
+                session: session,
+            };
+        });
+        const realSessions = sessions.filter(function (session) {
+            return session.type !== 'custom';
+        }).sort(compareSessions);
+        const realBlocks = [];
+
+        realSessions.forEach(function (session) {
+            const sessionEnd = session.end || session.start;
+            const lastBlock = realBlocks[realBlocks.length - 1];
+
+            if (lastBlock && session.start < lastBlock.end) {
+                lastBlock.sessions.push(session);
+                lastBlock.end = Math.max(lastBlock.end, sessionEnd);
+                return;
+            }
+
+            realBlocks.push({
+                type: 'real',
+                start: session.start,
+                end: sessionEnd,
+                sessions: [session],
+            });
+        });
+
+        return customBlocks.concat(realBlocks.map(function (block) {
+            if (block.sessions.length === 1) {
+                return {
+                    type: 'session',
+                    start: block.start,
+                    end: block.end,
+                    session: block.sessions[0],
+                };
+            }
+
+            return {
+                type: 'choice',
+                start: block.start,
+                end: block.end,
+                sessions: block.sessions,
+            };
+        })).sort(function (a, b) {
+            if (a.start !== b.start) {
+                return a.start - b.start;
+            }
+
+            return a.type === 'break' ? 1 : -1;
+        });
+    }
+
+    function getChoiceTrackSummary(sessions) {
+        const tracks = sessions.map(getPrimaryTrack).filter(Boolean).filter(function (track, index, list) {
+            return list.indexOf(track) === index;
+        });
+
+        if (!tracks.length) {
+            return 'Pick one saved option.';
+        }
+
+        return 'Pick one: ' + tracks.join(' / ');
     }
 
     function renderSession(session, savedIds) {
@@ -1495,7 +1616,7 @@
         if (conflicts.length) {
             body.append(element('div', {
                 className: 'wcc-conflict',
-                text: (isSaved ? 'Conflicts with ' : 'Replaces ') + conflicts.map(function (conflict) {
+                text: (isSaved ? 'Saved alternative to ' : 'Same time as ') + conflicts.map(function (conflict) {
                     return conflict.title;
                 }).join(', '),
             }));
@@ -1504,7 +1625,7 @@
         const toggle = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
-            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Replace' : 'Save')),
+            text: state.savingSessionId === session.id ? 'Saving...' : (isSaved ? 'Saved' : (conflicts.length ? 'Save option' : 'Save')),
         });
         toggle.disabled = state.savingSessionId !== null;
         toggle.addEventListener('click', function () {
@@ -1623,7 +1744,7 @@
                 return 'Be there in ' + formatHumanDuration(end - now);
             }
 
-            if (step.type === 'session') {
+            if (step.type === 'session' || step.type === 'choice') {
                 return 'Ends in ' + formatRelativeDuration(end - now);
             }
 
@@ -1656,7 +1777,7 @@
             return formatRelativeDuration(duration) + ' break';
         }
 
-        if (step.type === 'session' && duration) {
+        if ((step.type === 'session' || step.type === 'choice') && duration) {
             return 'Duration: ' + formatDuration(duration);
         }
 
@@ -2122,32 +2243,56 @@
     }
 
     function getLazyGapsForDay(sessions, savedIds, dayKey) {
-        const savedSessions = sessions.filter(function (session) {
-            return savedIds.has(session.id) && session.type !== 'custom' && session.start;
-        }).sort(compareSessions);
+        const savedBlocks = getSavedTimeBlocks(sessions, savedIds);
         const gaps = [];
 
-        if (!savedSessions.length) {
+        if (!savedBlocks.length) {
             return gaps;
         }
 
-        const dayStart = getDayStart(dayKey) || savedSessions[0].start;
-        const arrivalStart = Math.max(dayStart, savedSessions[0].start - 2 * 60 * 60);
-        addLazyGap(gaps, dayKey, arrivalStart, Math.max(arrivalStart, savedSessions[0].start - 10 * 60));
+        const dayStart = getDayStart(dayKey) || savedBlocks[0].start;
+        const arrivalStart = Math.max(dayStart, savedBlocks[0].start - 2 * 60 * 60);
+        addLazyGap(gaps, dayKey, arrivalStart, Math.max(arrivalStart, savedBlocks[0].start - 10 * 60));
 
-        for (let index = 0; index < savedSessions.length - 1; index++) {
-            const current = savedSessions[index];
-            const next = savedSessions[index + 1];
+        for (let index = 0; index < savedBlocks.length - 1; index++) {
+            const current = savedBlocks[index];
+            const next = savedBlocks[index + 1];
             const gapStart = current.end || current.start;
             const gapEnd = Math.max(gapStart, next.start - 10 * 60);
 
             addLazyGap(gaps, dayKey, gapStart, gapEnd);
         }
 
-        const lastSaved = savedSessions[savedSessions.length - 1];
+        const lastSaved = savedBlocks[savedBlocks.length - 1];
         addLazyGap(gaps, dayKey, lastSaved.end || lastSaved.start, getDayEnd(dayKey) || lastSaved.end || lastSaved.start);
 
         return gaps;
+    }
+
+    function getSavedTimeBlocks(sessions, savedIds) {
+        const blocks = [];
+        const savedSessions = sessions.filter(function (session) {
+            return savedIds.has(session.id) && session.type !== 'custom' && session.start;
+        }).sort(compareSessions);
+
+        savedSessions.forEach(function (session) {
+            const sessionEnd = session.end || session.start;
+            const lastBlock = blocks[blocks.length - 1];
+
+            if (lastBlock && session.start < lastBlock.end) {
+                lastBlock.end = Math.max(lastBlock.end, sessionEnd);
+                lastBlock.sessions.push(session);
+                return;
+            }
+
+            blocks.push({
+                start: session.start,
+                end: sessionEnd,
+                sessions: [session],
+            });
+        });
+
+        return blocks;
     }
 
     function addLazyGap(gaps, dayKey, start, end) {

@@ -400,7 +400,12 @@ class RestController {
                 }
             );
 
-            $first_saved_start = (int) $saved_sessions[0]['start'];
+            $saved_blocks = $this->get_saved_time_blocks( $saved_sessions );
+            if ( ! $saved_blocks ) {
+                continue;
+            }
+
+            $first_saved_start = (int) $saved_blocks[0]['start'];
             $day_start = ! empty( $day_sessions[0]['start'] ) ? (int) $day_sessions[0]['start'] : $first_saved_start;
             $arrival_start = max( $day_start, $first_saved_start - 2 * HOUR_IN_SECONDS );
             $this->append_compact_gap(
@@ -412,21 +417,47 @@ class RestController {
                 $saved_lookup
             );
 
-            for ( $index = 0; $index < count( $saved_sessions ) - 1; $index++ ) {
-                $gap_start = ! empty( $saved_sessions[ $index ]['end'] ) ? (int) $saved_sessions[ $index ]['end'] : (int) $saved_sessions[ $index ]['start'];
-                $gap_end = max( $gap_start, (int) $saved_sessions[ $index + 1 ]['start'] - 10 * MINUTE_IN_SECONDS );
+            for ( $index = 0; $index < count( $saved_blocks ) - 1; $index++ ) {
+                $gap_start = (int) $saved_blocks[ $index ]['end'];
+                $gap_end = max( $gap_start, (int) $saved_blocks[ $index + 1 ]['start'] - 10 * MINUTE_IN_SECONDS );
 
                 $this->append_compact_gap( $gaps, $day_key, $gap_start, $gap_end, $day_sessions, $saved_lookup );
             }
 
-            $last_saved = $saved_sessions[ count( $saved_sessions ) - 1 ];
-            $last_saved_end = ! empty( $last_saved['end'] ) ? (int) $last_saved['end'] : (int) $last_saved['start'];
-            $last_day_session = $day_sessions ? $day_sessions[ count( $day_sessions ) - 1 ] : $last_saved;
+            $last_saved_block = $saved_blocks[ count( $saved_blocks ) - 1 ];
+            $last_saved_end = (int) $last_saved_block['end'];
+            $last_day_session = $day_sessions ? $day_sessions[ count( $day_sessions ) - 1 ] : $last_saved_block;
             $day_end = ! empty( $last_day_session['end'] ) ? (int) $last_day_session['end'] : (int) $last_day_session['start'];
             $this->append_compact_gap( $gaps, $day_key, $last_saved_end, max( $last_saved_end, $day_end ), $day_sessions, $saved_lookup );
         }
 
         return $gaps;
+    }
+
+    private function get_saved_time_blocks( array $saved_sessions ): array {
+        $blocks = [];
+
+        foreach ( $saved_sessions as $session ) {
+            if ( empty( $session['start'] ) ) {
+                continue;
+            }
+
+            $start = (int) $session['start'];
+            $end = ! empty( $session['end'] ) ? (int) $session['end'] : $start;
+            $last_index = count( $blocks ) - 1;
+
+            if ( $last_index >= 0 && $start < $blocks[ $last_index ]['end'] ) {
+                $blocks[ $last_index ]['end'] = max( $blocks[ $last_index ]['end'], $end );
+                continue;
+            }
+
+            $blocks[] = [
+                'start' => $start,
+                'end'   => $end,
+            ];
+        }
+
+        return $blocks;
     }
 
     private function append_compact_gap( array &$gaps, string $day_key, int $gap_start, int $gap_end, array $day_sessions, array $saved_lookup ): void {
