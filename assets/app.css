@@ -531,7 +531,7 @@ a:focus-visible {
     color: var(--wcc-muted);
     font-size: 0.8rem;
     font-weight: 700;
-    text-transform: uppercase;
+    text-transform: none;
 }
 
 .wcc-companion-body h3 {

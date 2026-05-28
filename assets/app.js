@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.13';
+    const SCRIPT_BUILD = '20260528.14';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1938,7 +1938,7 @@
         const parts = [];
 
         if (days) {
-            parts.push(days + ' day' + (days === 1 ? '' : 's'));
+            return days + ' day' + (days === 1 ? '' : 's');
         }
 
         if (hours) {
