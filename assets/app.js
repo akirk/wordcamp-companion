@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.42';
+    const SCRIPT_BUILD = '20260528.43';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -20,6 +20,9 @@
         savingEvent: false,
         savingSessionId: null,
         savingCompanionEventUrl: '',
+        savingNotePostId: null,
+        noteDrafts: {},
+        notesExportCopied: false,
         debugOffsetSeconds: 0,
         debugPlaying: false,
         debugRate: 300,
@@ -184,6 +187,12 @@
                 }
             });
         });
+    }
+
+    function isEditingNotes() {
+        const active = document.activeElement;
+
+        return Boolean(active && active.classList && active.classList.contains('wcc-note-editor'));
     }
 
     async function loadInitialData() {
@@ -403,6 +412,7 @@
     function savedSessionPostToSession(post) {
         return {
             id: Number(post.session_id || 0),
+            post_id: Number(post.post_id || 0),
             title: post.title || 'Untitled session',
             url: post.url || '',
             start: Number(post.start || 0),
@@ -412,6 +422,7 @@
             speaker_names: Array.isArray(post.speaker_names) ? post.speaker_names : [],
             track_names: Array.isArray(post.track_names) ? post.track_names : [],
             category_names: Array.isArray(post.category_names) ? post.category_names : [],
+            notes: post.notes || '',
         };
     }
 
@@ -604,6 +615,40 @@
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.savingSessionId = null;
+            render();
+        }
+    }
+
+    async function saveSessionNotes(postId, notes) {
+        postId = Number(postId || 0);
+        if (!postId || state.savingNotePostId) {
+            return;
+        }
+
+        state.savingNotePostId = postId;
+        state.alert = null;
+        render();
+
+        try {
+            const updatedPost = await wpApi((config.savedSessionRestBase || 'wordcamp-companion-sessions') + '/' + postId, {
+                method: 'POST',
+                body: {
+                    meta: {
+                        wcc_session_notes: notes,
+                    },
+                },
+            });
+            const updatedNotes = updatedPost && updatedPost.meta && typeof updatedPost.meta.wcc_session_notes === 'string'
+                ? updatedPost.meta.wcc_session_notes
+                : notes;
+
+            updateSavedSessionNotes(postId, updatedNotes);
+            delete state.noteDrafts[postId];
+            state.alert = null;
+        } catch (error) {
+            state.alert = { type: 'error', message: error.message };
+        } finally {
+            state.savingNotePostId = null;
             render();
         }
     }
@@ -1032,6 +1077,8 @@
             return;
         }
 
+        nodes.schedule.append(renderNotesExport(sessions));
+
         groupSessionsByDay(sessions, getSelectedTimezone()).forEach(function (group) {
             const section = element('section', { className: 'wcc-day' });
             const header = element('div', { className: 'wcc-day-header' });
@@ -1051,6 +1098,152 @@
             section.append(header, list);
             nodes.schedule.append(section);
         });
+    }
+
+    function renderNotesExport(sessions) {
+        const markdown = buildNotesMarkdown(sessions);
+        const notedCount = sessions.filter(function (session) {
+            return getSessionNotes(session).trim() !== '';
+        }).length;
+        const section = element('section', { className: 'wcc-notes-export' });
+        const header = element('div', { className: 'wcc-notes-export-header' });
+        const title = element('div', { className: 'wcc-notes-export-title' });
+        const actions = element('div', { className: 'wcc-notes-export-actions' });
+        const output = element('textarea', {
+            className: 'wcc-notes-output',
+            readonly: 'readonly',
+            rows: notedCount ? '8' : '3',
+        });
+        const copyButton = element('button', {
+            className: 'wcc-button',
+            type: 'button',
+            text: state.notesExportCopied ? 'Copied' : 'Copy Markdown',
+        });
+        const downloadButton = element('button', {
+            className: 'wcc-button',
+            type: 'button',
+            text: 'Download .md',
+        });
+
+        title.append(
+            element('strong', { text: 'Session notes' }),
+            element('span', { text: notedCount + ' with notes / ' + sessions.length + ' saved' })
+        );
+        output.value = markdown;
+
+        copyButton.addEventListener('click', function () {
+            copyNotesMarkdown(markdown);
+        });
+        downloadButton.addEventListener('click', function () {
+            downloadNotesMarkdown(markdown);
+        });
+
+        actions.append(copyButton, downloadButton);
+        header.append(title, actions);
+        section.append(header, output);
+
+        return section;
+    }
+
+    async function copyNotesMarkdown(markdown) {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(markdown);
+            } else {
+                copyTextFallback(markdown);
+            }
+
+            state.notesExportCopied = true;
+            render();
+            window.setTimeout(function () {
+                state.notesExportCopied = false;
+                render();
+            }, 1600);
+        } catch (error) {
+            state.alert = { type: 'error', message: 'Could not copy notes.' };
+            render();
+        }
+    }
+
+    function copyTextFallback(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.append(textarea);
+        textarea.select();
+
+        const copied = document.execCommand('copy');
+        textarea.remove();
+
+        if (!copied) {
+            throw new Error('Copy failed.');
+        }
+    }
+
+    function downloadNotesMarkdown(markdown) {
+        const event = getSelectedEvent();
+        const filename = (getEventSlug(event) || 'wordcamp-notes') + '-notes.md';
+        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = element('a', {
+            href: url,
+            download: filename,
+        });
+
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function () {
+            URL.revokeObjectURL(url);
+        }, 0);
+    }
+
+    function buildNotesMarkdown(sessions) {
+        const event = getSelectedEvent();
+        const timeZone = getSelectedTimezone();
+        const notedSessions = sessions.filter(function (session) {
+            return getSessionNotes(session).trim() !== '';
+        });
+        const lines = [
+            '# ' + getEventTitle(event) + ' notes',
+            '',
+        ];
+
+        if (event) {
+            const meta = [event.location, formatEventRange(event)].filter(Boolean).join(' - ');
+            if (meta) {
+                lines.push(meta, '');
+            }
+        }
+
+        if (!notedSessions.length) {
+            lines.push('No session notes yet.');
+            return lines.join('\n');
+        }
+
+        groupSessionsByDay(notedSessions, timeZone).forEach(function (group) {
+            lines.push('## ' + group.label, '');
+            group.sessions.forEach(function (session) {
+                const meta = [
+                    formatSessionTime(session, timeZone),
+                    getPrimaryTrack(session),
+                    session.speaker_names && session.speaker_names.length ? session.speaker_names.join(', ') : '',
+                ].filter(Boolean);
+
+                lines.push('### ' + (session.title || 'Untitled session'));
+                if (meta.length) {
+                    lines.push(meta.join(' / '));
+                }
+                if (session.url) {
+                    lines.push(session.url);
+                }
+                lines.push('', getSessionNotes(session).trim(), '');
+            });
+        });
+
+        return lines.join('\n').trim() + '\n';
     }
 
     function renderTrackSchedule(sessions, savedIds) {
@@ -1445,6 +1638,13 @@
             body.append(element('div', { className: 'wcc-companion-meta', text: step.session.speaker_names.join(', ') }));
         }
 
+        if (step.type === 'session' && step.session) {
+            const notes = renderSessionNotes(step.session, { compact: true });
+            if (notes) {
+                body.append(notes);
+            }
+        }
+
         if (step.type === 'choice') {
             body.append(renderCompanionChoices(step.alternatives || [], timeZone));
         }
@@ -1494,6 +1694,11 @@
 
             if (meta.length) {
                 item.append(element('span', { text: meta.join(' / ') }));
+            }
+
+            const notes = renderSessionNotes(session, { compact: true });
+            if (notes) {
+                item.append(notes);
             }
 
             wrapper.append(item);
@@ -1761,6 +1966,7 @@
             wcc_track_names: listToMeta(session.track_names),
             wcc_category_names: listToMeta(session.category_names),
             wcc_session_snapshot: JSON.stringify(session),
+            wcc_session_notes: session.notes || '',
         };
     }
 
@@ -1788,6 +1994,7 @@
             speaker_names: metaToList(meta.wcc_speaker_names, fallback.speaker_names),
             track_names: metaToList(meta.wcc_track_names, fallback.track_names),
             category_names: metaToList(meta.wcc_category_names, fallback.category_names),
+            notes: typeof meta.wcc_session_notes === 'string' ? meta.wcc_session_notes : (fallback.notes || ''),
             updated_at: Math.floor(Date.now() / 1000),
         };
     }
@@ -2231,6 +2438,56 @@
         return 'Heads up: ' + names.join(', ') + ' ' + (overlaps.length === 1 ? 'runs' : 'run') + ' until ' + formatSlotTime(latestEnd, timeZone) + ', so there is a ' + formatDuration(longestOverlap) + ' overlap.';
     }
 
+    function renderSessionNotes(session, options) {
+        options = options || {};
+        const notePost = getSessionNotePost(session);
+        if (!notePost || !notePost.post_id) {
+            return null;
+        }
+
+        const postId = Number(notePost.post_id);
+        const value = getSessionNotes(session);
+        const persistedValue = typeof notePost.notes === 'string' ? notePost.notes : '';
+        const details = element('details', {
+            className: 'wcc-session-notes' + (options.compact ? ' is-compact' : ''),
+        });
+        const textarea = element('textarea', {
+            className: 'wcc-note-editor',
+            rows: options.compact ? '3' : '4',
+            placeholder: 'Notes',
+            'aria-label': 'Notes for ' + (session.title || 'session'),
+        });
+        const actions = element('div', { className: 'wcc-note-actions' });
+        const saveButton = element('button', {
+            className: 'wcc-button wcc-note-save',
+            type: 'button',
+            text: state.savingNotePostId === postId ? 'Saving...' : 'Save note',
+        });
+
+        if (value || Object.prototype.hasOwnProperty.call(state.noteDrafts, postId)) {
+            details.open = true;
+        }
+
+        textarea.value = value;
+        textarea.addEventListener('input', function () {
+            state.noteDrafts[postId] = textarea.value;
+        });
+
+        saveButton.disabled = state.savingNotePostId !== null;
+        saveButton.addEventListener('click', function () {
+            saveSessionNotes(postId, textarea.value);
+        });
+
+        actions.append(saveButton);
+        details.append(
+            element('summary', { text: persistedValue || value ? 'Notes' : 'Add notes' }),
+            textarea,
+            actions
+        );
+
+        return details;
+    }
+
     function renderSession(session, savedIds) {
         const isSaved = savedIds.has(session.id);
         const conflicts = getConflictsForSession(session, savedIds);
@@ -2295,6 +2552,13 @@
             }));
         }
 
+        if (isSaved) {
+            const notes = renderSessionNotes(session, { compact: false });
+            if (notes) {
+                body.append(notes);
+            }
+        }
+
         const toggle = element('button', {
             className: 'wcc-session-toggle' + (isSaved ? ' is-saved' : ''),
             type: 'button',
@@ -2318,7 +2582,11 @@
         clockTimer = window.setTimeout(function () {
             clockTimer = null;
             updateDebugPlayback();
-            render();
+            if (isEditingNotes()) {
+                renderDebugClock();
+            } else {
+                render();
+            }
             startClock();
         }, getClockDelay());
     }
@@ -2940,6 +3208,62 @@
         return posts.find(function (post) {
             return Number(post.session_id) === id;
         }) || null;
+    }
+
+    function getSessionNotePost(session) {
+        const savedPost = getSavedSessionPost(session && session.id);
+        if (savedPost) {
+            return savedPost;
+        }
+
+        if (session && session.post_id) {
+            return {
+                post_id: Number(session.post_id),
+                session_id: Number(session.id || 0),
+                notes: session.notes || '',
+            };
+        }
+
+        return null;
+    }
+
+    function getSessionNotes(session) {
+        const notePost = getSessionNotePost(session);
+        if (!notePost || !notePost.post_id) {
+            return session && typeof session.notes === 'string' ? session.notes : '';
+        }
+
+        const postId = Number(notePost.post_id);
+        if (Object.prototype.hasOwnProperty.call(state.noteDrafts, postId)) {
+            return state.noteDrafts[postId];
+        }
+
+        return typeof notePost.notes === 'string' ? notePost.notes : '';
+    }
+
+    function updateSavedSessionNotes(postId, notes) {
+        const selectedPlan = ensureSelectedPlan();
+        let sessionId = 0;
+
+        postId = Number(postId || 0);
+        selectedPlan.saved_sessions = (selectedPlan.saved_sessions || []).map(function (post) {
+            if (Number(post.post_id) !== postId) {
+                return post;
+            }
+
+            sessionId = Number(post.session_id || 0);
+            return Object.assign({}, post, {
+                notes: notes,
+                updated_at: Math.floor(Date.now() / 1000),
+            });
+        });
+        state.plan.saved_session_posts = selectedPlan.saved_sessions;
+
+        if (sessionId && state.schedule && Array.isArray(state.schedule.sessions)) {
+            state.schedule.sessions = state.schedule.sessions.map(function (session) {
+                return Number(session.id) === sessionId ? Object.assign({}, session, { notes: notes }) : session;
+            });
+        }
     }
 
     function addSavedSessionPost(savedPost) {

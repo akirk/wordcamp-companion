@@ -248,6 +248,7 @@ class PlannerRepository {
             'wcc_track_names',
             'wcc_category_names',
             'wcc_session_snapshot',
+            'wcc_session_notes',
         ];
 
         foreach ( $string_meta as $meta_key ) {
@@ -680,6 +681,7 @@ class PlannerRepository {
             'speaker_names'  => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_speaker_names', true ) ),
             'track_names'    => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_track_names', true ) ),
             'category_names' => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_category_names', true ) ),
+            'notes'          => sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) ),
             'updated_at'     => absint( get_post_modified_time( 'U', true, $post_id ) ),
         ];
     }

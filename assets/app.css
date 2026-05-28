@@ -517,6 +517,58 @@ a:focus-visible {
     margin-top: 10px;
 }
 
+.wcc-notes-export {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
+}
+
+.wcc-notes-export-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.wcc-notes-export-title {
+    display: grid;
+    gap: 2px;
+}
+
+.wcc-notes-export-title span {
+    color: var(--wcc-muted);
+    font-size: 0.86rem;
+}
+
+.wcc-notes-export-actions,
+.wcc-note-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wcc-notes-output,
+.wcc-note-editor {
+    width: 100%;
+    min-width: 0;
+    padding: 10px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    font: inherit;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.wcc-notes-output {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.86rem;
+}
+
 .wcc-companion {
     display: grid;
     gap: 10px;
@@ -1160,6 +1212,40 @@ a:focus-visible {
     margin-bottom: 0;
 }
 
+.wcc-session-notes {
+    margin-top: 10px;
+}
+
+.wcc-session-notes summary {
+    width: fit-content;
+    color: var(--wcc-primary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 650;
+}
+
+.wcc-session-notes .wcc-note-editor {
+    margin-top: 8px;
+}
+
+.wcc-note-actions {
+    margin-top: 8px;
+}
+
+.wcc-note-save {
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 0.86rem;
+}
+
+.wcc-session-notes.is-compact {
+    margin-top: 8px;
+}
+
+.wcc-session-notes.is-compact .wcc-note-editor {
+    min-height: 86px;
+}
+
 .wcc-tags {
     display: flex;
     flex-wrap: wrap;
@@ -1272,6 +1358,11 @@ a:focus-visible {
     .wcc-actions,
     .wcc-tabs {
         flex-wrap: wrap;
+    }
+
+    .wcc-notes-export-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .wcc-content {
