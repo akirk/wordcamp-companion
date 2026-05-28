@@ -1076,20 +1076,53 @@
         const event = getSelectedEvent();
         const timeZone = getSelectedTimezone();
         const steps = [];
-        const dayGroups = groupSessionsByDay(sourceSessions, timeZone);
         const scheduleDayKeys = getScheduleDayKeys();
+        const dayGroups = getCompanionDayGroups(sourceSessions, timeZone, scheduleDayKeys);
 
         dayGroups.forEach(function (group, dayIndex) {
             const daySessions = group.sessions.filter(function (session) {
                 return session.start;
             }).sort(compareSessions);
+            const scheduleDayIndex = scheduleDayKeys.indexOf(group.key);
+            const dayNumber = scheduleDayIndex >= 0 ? scheduleDayIndex + 1 : dayIndex + 1;
+            const dayStartFromSchedule = getDayStart(group.key);
+            const dayEndFromSchedule = getDayEnd(group.key);
 
             if (!daySessions.length) {
+                if (savedSessions.length && dayStartFromSchedule && dayEndFromSchedule) {
+                    getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
+                        steps.push({
+                            type: 'gap',
+                            dayKey: group.key,
+                            start: gap.start,
+                            end: gap.end,
+                            title: 'Add a session',
+                            detail: '',
+                            meta: formatSessionTime(gap, timeZone),
+                            candidates: gap.candidates || [],
+                        });
+                    });
+
+                    const isFinalEmptyDay = scheduleDayKeys.length
+                        ? scheduleDayIndex === scheduleDayKeys.length - 1
+                        : dayIndex + 1 >= dayGroups.length;
+
+                    steps.push({
+                        type: 'day-end',
+                        dayKey: group.key,
+                        start: dayEndFromSchedule,
+                        end: dayEndFromSchedule + 30 * 60,
+                        title: isFinalEmptyDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
+                        detail: isFinalEmptyDay ? 'WordCamp complete.' : 'See you tomorrow.',
+                        meta: group.label,
+                    });
+                }
+
                 return;
             }
 
             const firstSession = daySessions[0];
-            const dayStart = getDayStart(group.key) || firstSession.start;
+            const dayStart = dayStartFromSchedule || firstSession.start;
             const arrivalStart = Math.max(dayStart, firstSession.start - 2 * 60 * 60);
             const firstTrackStart = Math.max(arrivalStart, firstSession.start - 10 * 60);
             steps.push({
@@ -1138,10 +1171,7 @@
                 });
             });
 
-            const loadedGaps = getGapsForDay(group.key);
-            const gaps = loadedGaps.length || state.schedule.gaps_loaded
-                ? loadedGaps
-                : getLazyGapsForDay(daySessions, savedIds, group.key);
+            const gaps = getCompanionGapsForDay(daySessions, savedIds, group.key);
 
             gaps.forEach(function (gap) {
                 steps.push({
@@ -1161,11 +1191,9 @@
 
                 return sessionEnd > latest ? sessionEnd : latest;
             }, 0);
-            const dayEnd = getDayEnd(group.key) || plannedDayEnd;
+            const dayEnd = dayEndFromSchedule || plannedDayEnd;
 
             if (dayEnd) {
-                const scheduleDayIndex = scheduleDayKeys.indexOf(group.key);
-                const dayNumber = scheduleDayIndex >= 0 ? scheduleDayIndex + 1 : dayIndex + 1;
                 const isFinalDay = scheduleDayKeys.length
                     ? scheduleDayIndex === scheduleDayKeys.length - 1
                     : dayIndex + 1 >= dayGroups.length;
@@ -1778,6 +1806,44 @@
         return Object.keys(state.schedule.days).sort();
     }
 
+    function getCompanionDayGroups(sessions, timeZone, scheduleDayKeys) {
+        const groups = new Map();
+
+        scheduleDayKeys.forEach(function (dayKey) {
+            const dayStart = getDayStart(dayKey);
+            groups.set(dayKey, {
+                key: dayKey,
+                label: dayStart ? formatDate(dayStart, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                }, timeZone) : dayKey,
+                sessions: [],
+            });
+        });
+
+        groupSessionsByDay(sessions, timeZone).forEach(function (group) {
+            if (!groups.has(group.key)) {
+                groups.set(group.key, {
+                    key: group.key,
+                    label: group.label,
+                    sessions: [],
+                });
+            }
+
+            groups.get(group.key).label = group.label;
+            groups.get(group.key).sessions = groups.get(group.key).sessions.concat(group.sessions);
+        });
+
+        return Array.from(groups.values()).sort(function (a, b) {
+            const aStart = getDayStart(a.key) || (a.sessions[0] && a.sessions[0].start) || 0;
+            const bStart = getDayStart(b.key) || (b.sessions[0] && b.sessions[0].start) || 0;
+
+            return aStart - bStart;
+        });
+    }
+
     function getGapsForDay(dayKey) {
         if (!state.schedule || !Array.isArray(state.schedule.gaps)) {
             return [];
@@ -1785,6 +1851,41 @@
 
         return state.schedule.gaps.filter(function (gap) {
             return gap.day_key === dayKey;
+        });
+    }
+
+    function getCompanionGapsForDay(sessions, savedIds, dayKey) {
+        return mergeLoadedGaps(getLazyGapsForDay(sessions, savedIds, dayKey), dayKey);
+    }
+
+    function getEmptyDayGapsForDay(dayKey, dayStart, dayEnd) {
+        const gaps = [];
+        addLazyGap(gaps, dayKey, dayStart, dayEnd);
+
+        return mergeLoadedGaps(gaps, dayKey);
+    }
+
+    function mergeLoadedGaps(lazyGaps, dayKey) {
+        if (!state.schedule || !state.schedule.gaps_loaded) {
+            return lazyGaps;
+        }
+
+        const gapsByKey = new Map();
+        lazyGaps.forEach(function (gap) {
+            gapsByKey.set(getGapKey(gap), gap);
+        });
+
+        getGapsForDay(dayKey).forEach(function (gap) {
+            const key = getGapKey(gap);
+            const existing = gapsByKey.get(key) || {};
+
+            gapsByKey.set(key, Object.assign({}, existing, gap, {
+                candidates: gap.candidates || existing.candidates || [],
+            }));
+        });
+
+        return Array.from(gapsByKey.values()).sort(function (a, b) {
+            return (a.start || 0) - (b.start || 0);
         });
     }
 

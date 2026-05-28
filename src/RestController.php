@@ -351,17 +351,30 @@ class RestController {
 
         $gaps = [];
 
-        foreach ( $saved_by_day as $day_key => $saved_sessions ) {
+        foreach ( $sessions_by_day as $day_key => $day_sessions ) {
+            $saved_sessions = $saved_by_day[ $day_key ] ?? [];
             $day_sessions = $sessions_by_day[ $day_key ] ?? [];
             usort(
-                $saved_sessions,
+                $day_sessions,
                 function ( array $a, array $b ): int {
                     return ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
                 }
             );
 
+            if ( ! $saved_sessions ) {
+                $day_start = ! empty( $day_sessions[0]['start'] ) ? (int) $day_sessions[0]['start'] : 0;
+                $last_day_session = $day_sessions ? $day_sessions[ count( $day_sessions ) - 1 ] : [];
+                $day_end = ! empty( $last_day_session['end'] ) ? (int) $last_day_session['end'] : ( ! empty( $last_day_session['start'] ) ? (int) $last_day_session['start'] : 0 );
+
+                if ( $day_start && $day_end ) {
+                    $this->append_compact_gap( $gaps, $day_key, $day_start, max( $day_start, $day_end ), $day_sessions, $saved_lookup );
+                }
+
+                continue;
+            }
+
             usort(
-                $day_sessions,
+                $saved_sessions,
                 function ( array $a, array $b ): int {
                     return ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
                 }

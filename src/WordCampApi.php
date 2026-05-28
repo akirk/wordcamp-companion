@@ -10,6 +10,7 @@ class WordCampApi {
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
+    private const COMPANION_CACHE_SCHEMA_VERSION = 2;
     private const MAX_COLLECTION_PAGES = 20;
 
     public function get_wordcamps( bool $force_refresh = false ) {
@@ -167,7 +168,7 @@ class WordCampApi {
             );
         }
 
-        $cache_key = 'wordcamp_companion_schedule_companion_' . md5( $event_url . ':' . implode( ',', $session_ids ) . ':' . absint( $cache_version ) );
+        $cache_key = 'wordcamp_companion_schedule_companion_' . md5( self::COMPANION_CACHE_SCHEMA_VERSION . ':' . $event_url . ':' . implode( ',', $session_ids ) . ':' . absint( $cache_version ) );
         if ( ! $force_refresh ) {
             $cached = get_transient( $cache_key );
             if ( false !== $cached ) {
