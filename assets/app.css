@@ -5,7 +5,7 @@
     --wcc-surface-alt: var(--wp-app-color-surface-alt, #f0f2f4);
     --wcc-text: var(--wp-app-color-text, #1d2327);
     --wcc-muted: var(--wp-app-color-muted, #646970);
-    --wcc-border: rgba(31, 41, 55, 0.16);
+    --wcc-border: #d0d7de;
     --wcc-primary: #2563eb;
     --wcc-primary-contrast: #ffffff;
     --wcc-success: #16845f;
@@ -1103,7 +1103,7 @@ a:focus-visible {
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --wcc-border: rgba(226, 232, 240, 0.2);
+        --wcc-border: #3f4a57;
         --wcc-primary: #60a5fa;
         --wcc-primary-contrast: #0f172a;
         --wcc-success: #34d399;
