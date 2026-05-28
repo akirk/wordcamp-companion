@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.28';
+    const SCRIPT_BUILD = '20260528.30';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -309,13 +309,6 @@
         });
         const days = getLocalCompanionDays(event, sessions);
 
-        if (!sessions.length) {
-            const anchor = getArrivalAnchorSession(days);
-            if (anchor) {
-                sessions.push(anchor);
-            }
-        }
-
         return {
             event_url: state.selectedEventUrl,
             event: event,
@@ -361,6 +354,29 @@
             }
         });
 
+        if (!Object.keys(days).length && event && event.start) {
+            const eventStart = Number(event.start || 0);
+            const eventEnd = Number(event.end || eventStart);
+            const startDayKey = getDateKey(eventStart, timeZone);
+            const endDayKey = eventEnd ? getDateKey(eventEnd, timeZone) : startDayKey;
+
+            if (eventStart) {
+                days[startDayKey] = {
+                    key: startDayKey,
+                    start: eventStart,
+                    end: startDayKey === endDayKey && eventEnd ? eventEnd : eventStart,
+                };
+            }
+
+            if (eventEnd && endDayKey !== startDayKey) {
+                days[endDayKey] = {
+                    key: endDayKey,
+                    start: eventEnd,
+                    end: eventEnd,
+                };
+            }
+        }
+
         const storedDayKeys = new Set(Object.keys(days));
 
         (sessions || []).forEach(function (session) {
@@ -387,29 +403,6 @@
             sorted[dayKey] = days[dayKey];
             return sorted;
         }, {});
-    }
-
-    function getArrivalAnchorSession(days) {
-        const firstDayKey = Object.keys(days || {}).sort()[0];
-        const firstDay = firstDayKey ? days[firstDayKey] : null;
-        const start = Number(firstDay && firstDay.start || 0);
-
-        if (!start) {
-            return null;
-        }
-
-        return {
-            id: -start,
-            title: 'Arrival anchor',
-            start: start,
-            end: start,
-            duration: 0,
-            type: 'anchor',
-            arrival_anchor: true,
-            speaker_names: [],
-            track_names: [],
-            category_names: [],
-        };
     }
 
     function syncSelectedEventScheduleMetadata(data) {
@@ -1639,7 +1632,7 @@
             const dayEndFromSchedule = getKnownDayEnd(group.key, daySessions);
 
             if (!daySessions.length) {
-                if (savedSessions.length && dayStartFromSchedule && dayEndFromSchedule) {
+                if (dayStartFromSchedule && dayEndFromSchedule) {
                     steps.push({
                         type: 'arrival',
                         dayKey: group.key,
@@ -1652,18 +1645,20 @@
                         mapLinks: getEventMapLinks(event),
                     });
 
-                    getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
-                        steps.push({
-                            type: 'gap',
-                            dayKey: group.key,
-                            start: gap.start,
-                            end: gap.end,
-                            title: 'Add a session',
-                            detail: '',
-                            meta: formatSessionTime(gap, timeZone),
-                            candidates: gap.candidates || [],
+                    if (savedSessions.length) {
+                        getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
+                            steps.push({
+                                type: 'gap',
+                                dayKey: group.key,
+                                start: gap.start,
+                                end: gap.end,
+                                title: 'Add a session',
+                                detail: '',
+                                meta: formatSessionTime(gap, timeZone),
+                                candidates: gap.candidates || [],
+                            });
                         });
-                    });
+                    }
 
                     const isFinalEmptyDay = scheduleDayKeys.length
                         ? scheduleDayIndex === scheduleDayKeys.length - 1
@@ -1701,6 +1696,30 @@
             });
 
             if (!savedSessions.length) {
+                const plannedDayEnd = daySessions.reduce(function (latest, session) {
+                    const sessionEnd = session.end || session.start;
+
+                    return sessionEnd > latest ? sessionEnd : latest;
+                }, 0);
+                const dayEnd = dayEndFromSchedule || plannedDayEnd;
+
+                if (dayEnd) {
+                    const isFinalDay = scheduleDayKeys.length
+                        ? scheduleDayIndex === scheduleDayKeys.length - 1
+                        : dayIndex + 1 >= dayGroups.length;
+
+                    steps.push({
+                        type: 'day-end',
+                        dayKey: group.key,
+                        start: dayEnd,
+                        end: dayEnd + 30 * 60,
+                        title: isFinalDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
+                        detail: isFinalDay ? 'WordCamp complete.' : 'See you tomorrow.',
+                        meta: group.label,
+                        final: isFinalDay,
+                    });
+                }
+
                 return;
             }
 
