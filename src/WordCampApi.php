@@ -6,7 +6,7 @@ use WP_Error;
 
 class WordCampApi {
     private const CENTRAL_WORDCAMPS_URL = 'https://central.wordcamp.org/wp-json/wp/v2/wordcamps';
-    private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v3';
+    private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v4';
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
@@ -487,7 +487,7 @@ class WordCampApi {
         $title = isset( $event['title']['rendered'] ) ? $event['title']['rendered'] : '';
         $event_url = '';
 
-        foreach ( [ 'Website URL', 'URL', 'link' ] as $key ) {
+        foreach ( [ 'URL', 'Website URL', 'link' ] as $key ) {
             if ( ! empty( $event[ $key ] ) && is_string( $event[ $key ] ) ) {
                 $event_url = $this->normalize_event_site_url( $event[ $key ] );
                 break;
