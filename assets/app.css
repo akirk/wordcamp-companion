@@ -695,6 +695,11 @@ a:focus-visible {
     background: var(--wcc-border);
 }
 
+.wcc-companion-step.is-final::before {
+    bottom: auto;
+    height: 30px;
+}
+
 .wcc-companion-step.is-track .wcc-companion-marker::before {
     content: "\1F6B6";
     position: relative;

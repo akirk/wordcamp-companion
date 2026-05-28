@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.25';
+    const SCRIPT_BUILD = '20260528.26';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1141,6 +1141,7 @@
                 isCurrent ? 'is-current' : '',
                 step.exiting ? 'is-exiting' : '',
                 index === 0 && !isCurrent ? 'is-next' : '',
+                step.final ? 'is-final' : '',
             ].filter(Boolean).join(' '),
         });
         const timeZone = getSelectedTimezone();
