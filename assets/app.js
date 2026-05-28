@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.21';
+    const SCRIPT_BUILD = '20260528.23';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -13,6 +13,7 @@
         loadingEvents: false,
         loadingSchedule: false,
         loadingGapKey: '',
+        loadedGapKeys: {},
         openGapKey: '',
         companionVisibleStepKeys: null,
         exitingCompanionStepKeys: {},
@@ -231,6 +232,7 @@
 
         state.selectedEventUrl = eventUrl;
         state.schedule = null;
+        state.loadedGapKeys = {};
         resetCompanionAnimationState();
         state.savingEvent = true;
         state.alert = null;
@@ -266,6 +268,7 @@
         mode = mode || (state.view === 'schedule' ? 'full' : 'companion');
         if (mode === 'companion') {
             state.schedule = buildLocalCompanionSchedule();
+            state.loadedGapKeys = {};
             state.loadingSchedule = false;
             state.alert = null;
             render();
@@ -285,6 +288,7 @@
             });
             syncSelectedEventScheduleMetadata(state.schedule);
             state.loadingGapKey = '';
+            state.loadedGapKeys = {};
             state.openGapKey = '';
             resetCompanionAnimationState();
         } catch (error) {
@@ -443,12 +447,13 @@
         }
     }
 
-    async function loadGapCandidates(gapKey) {
-        if (!state.selectedEventUrl || !state.schedule || state.schedule.gaps_loaded || state.loadingGapKey) {
+    async function loadGapCandidates(gap) {
+        const gapKey = getGapKey(gap);
+        if (!state.selectedEventUrl || !state.schedule || isGapLoaded(gapKey) || state.loadingGapKey) {
             return;
         }
 
-        state.loadingGapKey = gapKey || 'all';
+        state.loadingGapKey = gapKey;
         render();
 
         try {
@@ -456,12 +461,15 @@
                 query: {
                     event_url: state.selectedEventUrl,
                     refresh: '0',
+                    day_key: gap.dayKey || gap.day_key || '',
+                    start: String(Number(gap.start || 0)),
+                    end: String(Number(gap.end || 0)),
                 },
             });
             syncSelectedEventScheduleMetadata(data);
-            state.schedule.gaps = Array.isArray(data.gaps) ? data.gaps : [];
+            mergeLoadedGapCandidates(gapKey, Array.isArray(data.gaps) ? data.gaps : []);
             state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
-            state.schedule.gaps_loaded = true;
+            state.loadedGapKeys[gapKey] = true;
             state.alert = null;
         } catch (error) {
             state.alert = { type: 'error', message: error.message };
@@ -469,6 +477,21 @@
             state.loadingGapKey = '';
             render();
         }
+    }
+
+    function mergeLoadedGapCandidates(requestedGapKey, gaps) {
+        const existingGaps = state.schedule && Array.isArray(state.schedule.gaps) ? state.schedule.gaps : [];
+        const nextGaps = existingGaps.filter(function (gap) {
+            return getGapKey(gap) !== requestedGapKey;
+        });
+
+        gaps.forEach(function (gap) {
+            if (getGapKey(gap) === requestedGapKey && hasGapCandidates(gap)) {
+                nextGaps.push(gap);
+            }
+        });
+
+        state.schedule.gaps = nextGaps;
     }
 
     async function toggleSession(sessionId) {
@@ -504,6 +527,8 @@
             state.alert = null;
             if (state.schedule && state.schedule.mode === 'companion') {
                 state.schedule = buildLocalCompanionSchedule();
+                state.loadedGapKeys = {};
+                state.openGapKey = '';
                 resetCompanionAnimationState();
             }
         } catch (error) {
@@ -1239,6 +1264,7 @@
     function renderGapPicker(step) {
         const candidates = Array.isArray(step.candidates) ? step.candidates : [];
         const gapKey = getGapKey(step);
+        const loaded = isGapLoaded(gapKey);
         const details = element('details', { className: 'wcc-gap-picker' });
         const timeZone = getSelectedTimezone();
 
@@ -1250,8 +1276,8 @@
         details.addEventListener('toggle', function () {
             if (details.open) {
                 state.openGapKey = gapKey;
-                if (!candidates.length && !state.schedule.gaps_loaded) {
-                    loadGapCandidates(gapKey);
+                if (!candidates.length && !loaded) {
+                    loadGapCandidates(step);
                 }
             } else if (state.openGapKey === gapKey) {
                 state.openGapKey = '';
@@ -1261,7 +1287,7 @@
         if (!candidates.length) {
             details.append(element('div', {
                 className: 'wcc-gap-empty',
-                text: state.loadingGapKey === gapKey ? 'Loading sessions...' : (state.schedule && state.schedule.gaps_loaded ? 'No sessions fit here.' : 'Open to load sessions.'),
+                text: state.loadingGapKey === gapKey ? 'Loading sessions...' : (loaded ? 'No sessions fit here.' : 'Open to load sessions.'),
             }));
 
             return details;
@@ -1273,7 +1299,7 @@
     }
 
     function getGapKey(step) {
-        return [step.dayKey || '', step.start || 0, step.end || 0].join(':');
+        return [step.dayKey || step.day_key || '', step.start || 0, step.end || 0].join(':');
     }
 
     function renderGapSchedule(candidates, timeZone) {
@@ -2539,13 +2565,31 @@
     }
 
     function mergeLoadedGaps(lazyGaps, dayKey) {
-        if (!state.schedule || !state.schedule.gaps_loaded) {
+        if (!state.schedule) {
             return lazyGaps;
         }
 
-        return getGapsForDay(dayKey).filter(hasGapCandidates).sort(function (a, b) {
+        const loadedGaps = new Map();
+        getGapsForDay(dayKey).forEach(function (gap) {
+            loadedGaps.set(getGapKey(gap), gap);
+        });
+
+        return lazyGaps.filter(function (gap) {
+            const gapKey = getGapKey(gap);
+            if (!isGapLoaded(gapKey)) {
+                return true;
+            }
+
+            return hasGapCandidates(loadedGaps.get(gapKey));
+        }).map(function (gap) {
+            return loadedGaps.get(getGapKey(gap)) || gap;
+        }).sort(function (a, b) {
             return (a.start || 0) - (b.start || 0);
         });
+    }
+
+    function isGapLoaded(gapKey) {
+        return Boolean(state.loadedGapKeys && state.loadedGapKeys[gapKey]);
     }
 
     function hasGapCandidates(gap) {

@@ -50,6 +50,15 @@ class RestController {
                         'refresh'   => [
                             'sanitize_callback' => 'rest_sanitize_boolean',
                         ],
+                        'day_key'   => [
+                            'sanitize_callback' => 'sanitize_text_field',
+                        ],
+                        'start'     => [
+                            'sanitize_callback' => 'absint',
+                        ],
+                        'end'       => [
+                            'sanitize_callback' => 'absint',
+                        ],
                     ],
                 ],
             ]
@@ -194,13 +203,17 @@ class RestController {
 
         $days = $this->get_schedule_days( $schedule );
         $this->repository->store_schedule_metadata( $event_url, $schedule, $days );
+        $requested_gap = $this->get_requested_gap( $request );
+        $gaps = $saved_session_ids
+            ? ( $requested_gap ? $this->get_gap_candidates_for_requested_gap( $schedule, $saved_session_ids, $requested_gap ) : $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids ) )
+            : [];
 
         return rest_ensure_response(
             [
                 'event_url'  => $schedule['event_url'] ?? '',
                 'timezone'   => $schedule['timezone'] ?? '',
                 'days'       => $days,
-                'gaps'       => $saved_session_ids ? $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids ) : [],
+                'gaps'       => $gaps,
                 'mode'       => 'gap-candidates',
                 'fetched_at' => $schedule['fetched_at'] ?? time(),
             ]
@@ -224,6 +237,22 @@ class RestController {
         }
 
         return array_map( 'absint', $plan['plans'][ $event_url ]['saved_session_ids'] );
+    }
+
+    private function get_requested_gap( WP_REST_Request $request ): array {
+        $start = absint( $request->get_param( 'start' ) );
+        $end = absint( $request->get_param( 'end' ) );
+        $day_key = sanitize_text_field( (string) $request->get_param( 'day_key' ) );
+
+        if ( ! $day_key || ! $start || ! $end || $end <= $start ) {
+            return [];
+        }
+
+        return [
+            'day_key' => $day_key,
+            'start'   => $start,
+            'end'     => $end,
+        ];
     }
 
     private function get_local_companion_schedule( array $plan, string $event_url ): array {
@@ -380,6 +409,42 @@ class RestController {
         $timezone = isset( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '';
 
         return $this->compact_gaps( $sessions, $saved_lookup, $timezone );
+    }
+
+    private function get_gap_candidates_for_requested_gap( array $schedule, array $saved_session_ids, array $requested_gap ): array {
+        $sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [];
+        $saved_lookup = array_fill_keys( array_map( 'absint', $saved_session_ids ), true );
+        $timezone = isset( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '';
+        $day_sessions = [];
+
+        foreach ( $sessions as $session ) {
+            if ( empty( $session['id'] ) || empty( $session['start'] ) ) {
+                continue;
+            }
+
+            if ( $this->get_schedule_day_key( (int) $session['start'], $timezone ) === $requested_gap['day_key'] ) {
+                $day_sessions[] = $session;
+            }
+        }
+
+        usort(
+            $day_sessions,
+            function ( array $a, array $b ): int {
+                return ( $a['start'] ?? PHP_INT_MAX ) <=> ( $b['start'] ?? PHP_INT_MAX );
+            }
+        );
+
+        $gaps = [];
+        $this->append_compact_gap(
+            $gaps,
+            $requested_gap['day_key'],
+            (int) $requested_gap['start'],
+            (int) $requested_gap['end'],
+            $day_sessions,
+            $saved_lookup
+        );
+
+        return $gaps;
     }
 
     private function compact_gaps( array $sessions, array $saved_lookup, string $timezone ): array {
