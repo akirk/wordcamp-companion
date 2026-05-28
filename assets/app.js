@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.36';
+    const SCRIPT_BUILD = '20260528.38';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -1227,7 +1227,7 @@
         const addButton = element('a', {
             className: 'wcc-plan-link',
             href: getPlanYourDayUrl(null),
-            text: 'Attend WordCamp',
+            text: 'Upcoming WordCamps',
         });
 
         switcher.append(element('span', { text: 'WordCamp' }));
@@ -3147,6 +3147,20 @@
         }
 
         return String(a.title || '').localeCompare(String(b.title || ''));
+    }
+
+    function compareEvents(a, b) {
+        const aStart = Number(a && a.start || Number.MAX_SAFE_INTEGER);
+        const bStart = Number(b && b.start || Number.MAX_SAFE_INTEGER);
+
+        if (aStart !== bStart) {
+            return aStart - bStart;
+        }
+
+        const aTitle = a && (a.title || a.location || a.event_url) ? (a.title || a.location || a.event_url) : '';
+        const bTitle = b && (b.title || b.location || b.event_url) ? (b.title || b.location || b.event_url) : '';
+
+        return String(aTitle).localeCompare(String(bTitle));
     }
 
     function formatEventRange(event) {

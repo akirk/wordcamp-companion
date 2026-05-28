@@ -80,22 +80,41 @@ class PlannerRepository {
     }
 
     public function get_plan( int $user_id ): array {
-        $term_id = absint( get_user_meta( $user_id, self::SELECTED_TERM_META_KEY, true ) );
-        if ( ! $term_id || ! term_exists( $term_id, self::TAXONOMY ) ) {
+        $selected_term_id = absint( get_user_meta( $user_id, self::SELECTED_TERM_META_KEY, true ) );
+        if ( $selected_term_id && ! term_exists( $selected_term_id, self::TAXONOMY ) ) {
+            $selected_term_id = 0;
+        }
+
+        $term_ids = $this->get_saved_wordcamp_term_ids( $user_id );
+        if ( $selected_term_id && ! in_array( $selected_term_id, $term_ids, true ) ) {
+            $term_ids[] = $selected_term_id;
+        }
+
+        if ( ! $term_ids ) {
             return $this->empty_plan();
         }
 
-        $event = $this->get_event_from_term( $term_id );
-        if ( empty( $event['event_url'] ) ) {
+        $plans = $this->get_attending_plans( $user_id, $term_ids );
+        if ( ! $plans ) {
             return $this->empty_plan();
         }
 
-        $event_url = $event['event_url'];
-        $plans = $this->get_attending_plans( $user_id, $term_id );
+        $selected_plan = $this->get_next_saved_plan( $plans );
+        if ( ! $selected_plan && $selected_term_id ) {
+            $selected_plan = $this->get_plan_by_term_id( $plans, $selected_term_id );
+        }
+        if ( ! $selected_plan ) {
+            $selected_plan = reset( $plans );
+        }
+
+        $event_url = $selected_plan['event']['event_url'] ?? '';
+        if ( '' === $event_url ) {
+            return $this->empty_plan();
+        }
 
         return [
-            'selected_event_url'      => $event_url,
-            'selected_wordcamp_term_id' => $term_id,
+            'selected_event_url'       => $event_url,
+            'selected_wordcamp_term_id' => absint( $selected_plan['wordcamp_term_id'] ?? 0 ),
             'saved_session_posts'     => $plans[ $event_url ]['saved_sessions'] ?? [],
             'plans'                   => $plans,
         ];
@@ -374,18 +393,9 @@ class PlannerRepository {
         return is_array( $decoded ) ? $this->sanitize_schedule_days( $decoded ) : [];
     }
 
-    private function get_attending_plans( int $user_id, int $selected_term_id ): array {
-        $term_ids = [ $selected_term_id ];
-        $saved_term_ids = $this->get_saved_wordcamp_term_ids( $user_id );
-
-        foreach ( $saved_term_ids as $term_id ) {
-            if ( ! in_array( $term_id, $term_ids, true ) ) {
-                $term_ids[] = $term_id;
-            }
-        }
-
+    private function get_attending_plans( int $user_id, array $term_ids ): array {
         $plans = [];
-        foreach ( $term_ids as $term_id ) {
+        foreach ( array_unique( array_map( 'absint', $term_ids ) ) as $term_id ) {
             if ( ! $term_id || ! term_exists( $term_id, self::TAXONOMY ) ) {
                 continue;
             }
@@ -421,6 +431,71 @@ class PlannerRepository {
         }
 
         return $plans;
+    }
+
+    private function get_next_saved_plan( array $plans ): array {
+        $saved_plans = array_values(
+            array_filter(
+                $plans,
+                function ( array $plan ): bool {
+                    return ! empty( $plan['saved_session_ids'] );
+                }
+            )
+        );
+
+        if ( ! $saved_plans ) {
+            return [];
+        }
+
+        $now = time();
+        $future_plans = array_values(
+            array_filter(
+                $saved_plans,
+                function ( array $plan ) use ( $now ): bool {
+                    return ! empty( $plan['event']['start'] ) && absint( $plan['event']['start'] ) >= $now;
+                }
+            )
+        );
+
+        if ( $future_plans ) {
+            usort( $future_plans, [ $this, 'compare_plans_by_start_ascending' ] );
+            return $future_plans[0];
+        }
+
+        usort( $saved_plans, [ $this, 'compare_plans_by_start_descending' ] );
+        return $saved_plans[0];
+    }
+
+    private function get_plan_by_term_id( array $plans, int $term_id ): array {
+        foreach ( $plans as $plan ) {
+            if ( absint( $plan['wordcamp_term_id'] ?? 0 ) === $term_id ) {
+                return $plan;
+            }
+        }
+
+        return [];
+    }
+
+    private function compare_plans_by_start_ascending( array $a, array $b ): int {
+        $a_start = ! empty( $a['event']['start'] ) ? absint( $a['event']['start'] ) : PHP_INT_MAX;
+        $b_start = ! empty( $b['event']['start'] ) ? absint( $b['event']['start'] ) : PHP_INT_MAX;
+
+        if ( $a_start !== $b_start ) {
+            return $a_start <=> $b_start;
+        }
+
+        return strcasecmp( (string) ( $a['event']['title'] ?? '' ), (string) ( $b['event']['title'] ?? '' ) );
+    }
+
+    private function compare_plans_by_start_descending( array $a, array $b ): int {
+        $a_start = ! empty( $a['event']['start'] ) ? absint( $a['event']['start'] ) : 0;
+        $b_start = ! empty( $b['event']['start'] ) ? absint( $b['event']['start'] ) : 0;
+
+        if ( $a_start !== $b_start ) {
+            return $b_start <=> $a_start;
+        }
+
+        return strcasecmp( (string) ( $a['event']['title'] ?? '' ), (string) ( $b['event']['title'] ?? '' ) );
     }
 
     private function get_saved_wordcamp_term_ids( int $user_id ): array {
