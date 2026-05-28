@@ -10,25 +10,23 @@
     <?php wp_app_body_open(); ?>
 
     <main id="wordcamp-companion-app" class="wcc-app" data-page="plan">
-        <header class="wcc-header">
-            <div>
-                <h1><?php echo esc_html__( 'WordCamp Companion', 'wordcamp-companion' ); ?></h1>
+        <header class="wcc-header wcc-plan-header">
+            <div class="wcc-plan-heading">
+                <div class="wcc-plan-title-row">
+                    <h1>
+                        <a id="wcc-page-title-link" class="wcc-title-link" href="<?php echo esc_url( home_url( '/wordcamp-companion/' ) ); ?>">
+                            <span id="wcc-page-title"><?php echo esc_html__( 'WordCamp Companion', 'wordcamp-companion' ); ?></span>
+                        </a>
+                    </h1>
+                    <div class="wcc-selected-actions wcc-title-actions">
+                        <a id="wcc-open-event" class="wcc-button" href="#" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Event Site', 'wordcamp-companion' ); ?></a>
+                        <a id="wcc-change-event" class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/plan-your/' ) ); ?>"><?php echo esc_html__( 'Change WordCamp', 'wordcamp-companion' ); ?></a>
+                    </div>
+                </div>
                 <p id="wcc-current-event" class="wcc-current-event"></p>
             </div>
             <div id="wcc-plan-summary" class="wcc-plan-summary"></div>
         </header>
-
-        <section id="wcc-selected-event" class="wcc-selected-event" hidden>
-            <div>
-                <span class="wcc-kicker"><?php echo esc_html__( 'Selected WordCamp', 'wordcamp-companion' ); ?></span>
-                <h2 id="wcc-selected-title"></h2>
-                <p id="wcc-selected-meta"></p>
-            </div>
-            <div class="wcc-selected-actions">
-                <a id="wcc-open-event" class="wcc-button" href="#" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Event Site', 'wordcamp-companion' ); ?></a>
-                <a id="wcc-change-event" class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/plan-your/' ) ); ?>"><?php echo esc_html__( 'Change WordCamp', 'wordcamp-companion' ); ?></a>
-            </div>
-        </section>
 
         <section id="wcc-planner-nav" class="wcc-planner-nav" aria-label="<?php echo esc_attr__( 'Planner controls', 'wordcamp-companion' ); ?>">
             <div class="wcc-tabs" role="tablist" aria-label="<?php echo esc_attr__( 'Schedule views', 'wordcamp-companion' ); ?>">

@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.38';
+    const SCRIPT_BUILD = '20260528.39';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -44,6 +44,8 @@
         nodes.debugJumps = Array.from(document.querySelectorAll('[data-debug-jump]'));
         nodes.debugStart = document.querySelector('[data-debug-start]');
         nodes.header = document.querySelector('.wcc-header');
+        nodes.pageTitle = document.getElementById('wcc-page-title');
+        nodes.pageTitleLink = document.getElementById('wcc-page-title-link');
         nodes.currentEvent = document.getElementById('wcc-current-event');
         nodes.planSummary = document.getElementById('wcc-plan-summary');
         nodes.selectedEvent = document.getElementById('wcc-selected-event');
@@ -693,6 +695,13 @@
         const savedIds = getSavedSessionIds();
         const conflictCount = getConflictCount(savedIds);
 
+        if (nodes.pageTitle) {
+            nodes.pageTitle.textContent = event ? getEventTitle(event) : 'WordCamp Companion';
+        }
+        if (nodes.pageTitleLink) {
+            nodes.pageTitleLink.href = config.appUrl || '/wordcamp-companion/';
+        }
+
         if (state.page === 'plan-selector') {
             nodes.currentEvent.textContent = 'Choose the next WordCamp you are planning to attend.';
             nodes.planSummary.textContent = '';
@@ -716,28 +725,41 @@
     }
 
     function renderSelectedEvent() {
-        if (!nodes.selectedTitle || !nodes.selectedMeta || !nodes.openEvent) {
+        if (!nodes.selectedTitle && !nodes.selectedMeta && !nodes.openEvent) {
             return;
         }
 
         const event = getSelectedEvent();
 
         if (!event) {
-            nodes.selectedTitle.textContent = '';
-            nodes.selectedMeta.textContent = '';
-            nodes.openEvent.href = '#';
+            if (nodes.selectedTitle) {
+                nodes.selectedTitle.textContent = '';
+            }
+            if (nodes.selectedMeta) {
+                nodes.selectedMeta.textContent = '';
+            }
+            if (nodes.openEvent) {
+                nodes.openEvent.href = '#';
+                nodes.openEvent.hidden = true;
+            }
             return;
         }
 
-        nodes.selectedTitle.textContent = event.title || 'Selected WordCamp';
-        nodes.selectedMeta.textContent = [event.location, formatEventRange(event), event.timezone].filter(Boolean).join(' - ');
+        if (nodes.selectedTitle) {
+            nodes.selectedTitle.textContent = event.title || 'Selected WordCamp';
+        }
+        if (nodes.selectedMeta) {
+            nodes.selectedMeta.textContent = [event.location, formatEventRange(event), event.timezone].filter(Boolean).join(' - ');
+        }
 
-        if (event.event_url) {
-            nodes.openEvent.href = event.event_url;
-            nodes.openEvent.hidden = false;
-        } else {
-            nodes.openEvent.href = '#';
-            nodes.openEvent.hidden = true;
+        if (nodes.openEvent) {
+            if (event.event_url) {
+                nodes.openEvent.href = event.event_url;
+                nodes.openEvent.hidden = false;
+            } else {
+                nodes.openEvent.href = '#';
+                nodes.openEvent.hidden = true;
+            }
         }
     }
 
