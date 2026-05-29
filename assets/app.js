@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.7';
+    const SCRIPT_BUILD = '20260529.8';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const config = window.WordCampCompanionConfig || {};
@@ -332,6 +332,11 @@
             return;
         }
 
+        const previousSelectedEventUrl = state.selectedEventUrl;
+        const previousSchedule = state.schedule;
+        const previousLoadedGapKeys = Object.assign({}, state.loadedGapKeys);
+        const previousOpenGapKey = state.openGapKey;
+
         state.selectedEventUrl = eventUrl;
         state.schedule = null;
         state.loadedGapKeys = {};
@@ -356,6 +361,11 @@
                 await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
             }
         } catch (error) {
+            state.selectedEventUrl = previousSelectedEventUrl;
+            state.schedule = previousSchedule;
+            state.loadedGapKeys = previousLoadedGapKeys;
+            state.openGapKey = previousOpenGapKey;
+            resetCompanionAnimationState();
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.savingEvent = false;
@@ -428,6 +438,7 @@
 
         state.loadingSchedule = true;
         state.alert = null;
+        const previousSchedule = state.schedule;
         render();
 
         try {
@@ -443,7 +454,9 @@
             state.openGapKey = '';
             resetCompanionAnimationState();
         } catch (error) {
-            state.schedule = null;
+            if (previousSchedule && previousSchedule.event_url === state.selectedEventUrl) {
+                state.schedule = previousSchedule;
+            }
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.loadingSchedule = false;
@@ -843,7 +856,14 @@
             fetchOptions.body = JSON.stringify(options.body);
         }
 
-        const response = await fetch(url.toString(), fetchOptions);
+        let response;
+
+        try {
+            response = await fetch(url.toString(), fetchOptions);
+        } catch (error) {
+            throw new Error('Network connection unavailable. Cached data was kept when available.');
+        }
+
         const data = await response.json().catch(function () {
             return {};
         });
@@ -1282,7 +1302,7 @@
         }
 
         if (state.view === 'schedule' && state.schedule.mode !== 'full') {
-            nodes.status.textContent = 'Loading full schedule...';
+            nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Full schedule unavailable.' }));
             return;
         }
 
