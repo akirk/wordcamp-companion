@@ -20,7 +20,7 @@
                     </h1>
                     <div class="wcc-selected-actions wcc-title-actions">
                         <a id="wcc-open-event" class="wcc-button" href="#" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Event Site', 'wordcamp-companion' ); ?></a>
-                        <button id="wcc-companion-visibility" class="wcc-button" type="button" hidden><?php echo esc_html__( 'Show in Companion', 'wordcamp-companion' ); ?></button>
+                        <button id="wcc-companion-visibility" class="wcc-button" type="button" hidden><?php echo esc_html__( 'Attend', 'wordcamp-companion' ); ?></button>
                         <a id="wcc-change-event" class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/plan-your/' ) ); ?>"><?php echo esc_html__( 'Change WordCamp', 'wordcamp-companion' ); ?></a>
                     </div>
                 </div>

@@ -1144,10 +1144,10 @@
         const isSaving = state.savingCompanionEventUrl === event.event_url;
 
         setHidden(button, false);
-        button.textContent = isSaving ? 'Saving...' : (isShown ? 'Shown in companion' : 'Show in companion');
+        button.textContent = isSaving ? 'Saving...' : (isShown ? 'Attending' : 'Attend');
         button.disabled = isSaving;
         button.setAttribute('aria-pressed', isShown ? 'true' : 'false');
-        button.setAttribute('aria-label', (isShown ? 'Hide from companion: ' : 'Show in companion: ') + getEventTitle(event));
+        button.setAttribute('aria-label', (isShown ? 'Stop attending: ' : 'Attend: ') + getEventTitle(event));
     }
 
     function renderTabs() {
