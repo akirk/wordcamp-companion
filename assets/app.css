@@ -1470,6 +1470,10 @@ a:focus-visible {
         text-align: left;
     }
 
+    .wcc-companion-link-plan {
+        display: none;
+    }
+
     .wcc-notes-header-side {
         justify-items: start;
     }
