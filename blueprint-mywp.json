@@ -15,7 +15,7 @@
 			"pluginData": {
 				"resource": "git:directory",
 				"url": "https://github.com/akirk/my-apps",
-				"ref": "dist/main",
+				"ref": "main",
 				"refType": "branch"
 			},
 			"options": {
