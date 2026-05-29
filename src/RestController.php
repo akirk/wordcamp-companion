@@ -336,6 +336,7 @@ class RestController {
             'end'            => isset( $session_post['end'] ) ? absint( $session_post['end'] ) : null,
             'type'           => isset( $session_post['type'] ) ? sanitize_key( (string) $session_post['type'] ) : '',
             'speaker_names'  => isset( $session_post['speaker_names'] ) && is_array( $session_post['speaker_names'] ) ? array_map( 'sanitize_text_field', $session_post['speaker_names'] ) : [],
+            'speaker_urls'   => isset( $session_post['speaker_urls'] ) && is_array( $session_post['speaker_urls'] ) ? array_map( 'esc_url_raw', $session_post['speaker_urls'] ) : [],
             'track_names'    => isset( $session_post['track_names'] ) && is_array( $session_post['track_names'] ) ? array_map( 'sanitize_text_field', $session_post['track_names'] ) : [],
             'category_names' => isset( $session_post['category_names'] ) && is_array( $session_post['category_names'] ) ? array_map( 'sanitize_text_field', $session_post['category_names'] ) : [],
         ];
@@ -733,6 +734,7 @@ class RestController {
             'end'            => isset( $session['end'] ) ? absint( $session['end'] ) : null,
             'type'           => isset( $session['type'] ) ? sanitize_key( $session['type'] ) : '',
             'speaker_names'  => isset( $session['speaker_names'] ) && is_array( $session['speaker_names'] ) ? array_map( 'sanitize_text_field', $session['speaker_names'] ) : [],
+            'speaker_urls'   => isset( $session['speaker_urls'] ) && is_array( $session['speaker_urls'] ) ? array_map( 'esc_url_raw', $session['speaker_urls'] ) : [],
             'track_names'    => isset( $session['track_names'] ) && is_array( $session['track_names'] ) ? array_map( 'sanitize_text_field', $session['track_names'] ) : [],
             'category_names' => isset( $session['category_names'] ) && is_array( $session['category_names'] ) ? array_map( 'sanitize_text_field', $session['category_names'] ) : [],
         ];

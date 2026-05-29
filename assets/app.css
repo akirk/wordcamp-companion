@@ -895,6 +895,10 @@ a:focus-visible {
     font-size: 0.88rem;
 }
 
+.wcc-choice-speakers {
+    font-size: 0.88rem;
+}
+
 .wcc-companion-step.is-track,
 .wcc-companion-step.is-break,
 .wcc-companion-step.is-day-end,
@@ -1268,6 +1272,13 @@ a:focus-visible {
 }
 
 .wcc-session h3 a {
+    color: inherit;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.wcc-session-speakers a,
+.wcc-companion-speakers a {
     color: inherit;
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
