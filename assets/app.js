@@ -1639,11 +1639,6 @@
         const now = getNow();
         const visibleSteps = getAnimatedCompanionSteps(timeline.steps, now);
 
-        if (!timeline.hasSavedSessions && timeline.steps.length) {
-            const notice = element('div', { className: 'wcc-companion-note', text: 'No saved sessions.' });
-            nodes.schedule.append(notice);
-        }
-
         if (!visibleSteps.length) {
             nodes.schedule.append(element('div', {
                 className: 'wcc-empty',
