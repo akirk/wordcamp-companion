@@ -1,7 +1,7 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.2';
+    const SCRIPT_BUILD = '20260529.3';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
-    const config = window.WordCampCompanionConfig || {};
+    let config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
         plan: { selected_event_url: '', plans: {} },
@@ -39,6 +39,7 @@
     let companionExitTimer = null;
 
     function init() {
+        config = window.WordCampCompanionConfig || config || {};
         nodes.app = document.getElementById('wordcamp-companion-app');
         state.page = nodes.app && nodes.app.dataset.page ? nodes.app.dataset.page : 'companion';
         state.view = state.page === 'plan' ? 'schedule' : (state.page === 'notes' ? 'notes' : 'companion');
@@ -1619,7 +1620,7 @@
                     element('a', {
                         className: 'wcc-button',
                         href: getPlanYourDayUrl(null),
-                        text: 'wordcamps',
+                        text: 'Upcoming WordCamps',
                     }),
                 ],
             })

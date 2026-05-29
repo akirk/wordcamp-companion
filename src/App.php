@@ -99,31 +99,13 @@ class App extends BaseApp {
         }
 
         add_action(
-            'wp_app_body_close',
-            function (): void {
+            'wp_app_head_scripts',
+            function () use ( $asset_version ): void {
                 echo '<script id="wordcamp-companion-config-inline-js">' . "\n";
-                echo 'window.WordCampCompanionConfig = ' . wp_json_encode(
-                    [
-                        'restUrl'                 => rest_url( 'wordcamp-companion/v1/' ),
-                        'wpRestUrl'               => rest_url( 'wp/v2/' ),
-                        'nonce'                   => wp_create_nonce( 'wp_rest' ),
-                        'loginUrl'                => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
-                        'appUrl'                  => home_url( '/' . $this->get_url_path() . '/' ),
-                        'notesUrl'                => home_url( '/' . $this->get_url_path() . '/notes/' ),
-                        'planBaseUrl'             => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
-                        'planUrl'                 => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
-                        'routeWordcampSlug'       => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
-                        'assetVersion'            => $asset_version,
-                        'timeFormat'              => get_option( 'time_format' ),
-                        'uses24HourTime'          => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),
-                        'settings'                => UserSettings::get_settings( get_current_user_id() ),
-                        'initialPlan'             => $this->repository->get_plan( get_current_user_id() ),
-                        'savedSessionRestBase'    => PlannerRepository::POST_REST_BASE,
-                        'wordcampTaxonomyRestBase' => PlannerRepository::TAXONOMY_REST_BASE,
-                    ]
-                ) . ';' . "\n";
+                echo 'window.WordCampCompanionConfig = ' . wp_json_encode( $this->get_client_config( $asset_version ) ) . ';' . "\n";
                 echo '</script>' . "\n";
-            }
+            },
+            0
         );
 
         if ( file_exists( $js_path ) ) {
@@ -141,5 +123,26 @@ class App extends BaseApp {
                 $version
             );
         }
+    }
+
+    private function get_client_config( string $asset_version ): array {
+        return [
+            'restUrl'                  => rest_url( 'wordcamp-companion/v1/' ),
+            'wpRestUrl'                => rest_url( 'wp/v2/' ),
+            'nonce'                    => wp_create_nonce( 'wp_rest' ),
+            'loginUrl'                 => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
+            'appUrl'                   => home_url( '/' . $this->get_url_path() . '/' ),
+            'notesUrl'                 => home_url( '/' . $this->get_url_path() . '/notes/' ),
+            'planBaseUrl'              => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
+            'planUrl'                  => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
+            'routeWordcampSlug'        => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
+            'assetVersion'             => $asset_version,
+            'timeFormat'               => get_option( 'time_format' ),
+            'uses24HourTime'           => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),
+            'settings'                 => UserSettings::get_settings( get_current_user_id() ),
+            'initialPlan'              => $this->repository->get_plan( get_current_user_id() ),
+            'savedSessionRestBase'     => PlannerRepository::POST_REST_BASE,
+            'wordcampTaxonomyRestBase' => PlannerRepository::TAXONOMY_REST_BASE,
+        ];
     }
 }
