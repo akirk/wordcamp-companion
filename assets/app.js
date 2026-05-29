@@ -1766,8 +1766,6 @@
             text: 'Upcoming WordCamps',
         });
 
-        switcher.append(element('span', { text: 'WordCamp' }));
-
         if (!events.length) {
             select.append(element('option', { value: '', text: state.loadingEvents ? 'Loading...' : 'No WordCamps yet' }));
             select.disabled = true;
