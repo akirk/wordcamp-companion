@@ -786,6 +786,12 @@ a:focus-visible {
     line-height: 1.25;
 }
 
+.wcc-companion-body h3 a {
+    color: inherit;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
 .wcc-companion-remove {
     flex: 0 0 auto;
     display: grid;
@@ -854,6 +860,7 @@ a:focus-visible {
 }
 
 .wcc-companion-meta,
+.wcc-companion-speakers,
 .wcc-companion-timing {
     margin-top: 5px;
     color: var(--wcc-muted);

@@ -1874,7 +1874,21 @@
 
         if (!isGap) {
             const heading = element('div', { className: 'wcc-companion-heading' });
-            heading.append(element('h3', { text: step.title }));
+            const title = element('h3');
+            const titleText = step.title || 'Untitled session';
+
+            if (step.session && step.session.url) {
+                title.append(element('a', {
+                    href: step.session.url,
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                    text: titleText,
+                }));
+            } else {
+                title.textContent = titleText;
+            }
+
+            heading.append(title);
 
             if (step.type === 'session' && step.session) {
                 heading.append(renderCompanionRemoveButton(step.session));
@@ -1900,7 +1914,7 @@
         }
 
         if (step.session && step.session.speaker_names && step.session.speaker_names.length) {
-            body.append(element('div', { className: 'wcc-companion-meta', text: step.session.speaker_names.join(', ') }));
+            body.append(element('div', { className: 'wcc-companion-speakers', text: step.session.speaker_names.join(', ') }));
         }
 
         if (step.type === 'choice') {
