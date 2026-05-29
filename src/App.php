@@ -29,6 +29,7 @@ class App extends BaseApp {
 
         add_action( 'init', [ PlannerRepository::class, 'register_content_types' ] );
         add_action( 'rest_api_init', [ $this->rest_controller, 'register_routes' ] );
+        add_action( 'wp_app_before_render', [ $this, 'redirect_empty_companion_to_wordcamp_selector' ], 10, 2 );
         $this->enqueue_assets();
     }
 
@@ -82,6 +83,20 @@ class App extends BaseApp {
 
     public function deactivate(): void {
         flush_rewrite_rules();
+    }
+
+    public function redirect_empty_companion_to_wordcamp_selector( string $template_path, array $route_data ): void {
+        if ( 'index.php' !== basename( $template_path ) || ( $route_data['pattern'] ?? null ) !== '' ) {
+            return;
+        }
+
+        $plan = $this->repository->get_plan( get_current_user_id() );
+        if ( ! empty( $plan['selected_event_url'] ) ) {
+            return;
+        }
+
+        wp_safe_redirect( home_url( '/' . $this->get_url_path() . '/plan-your/' ) );
+        exit;
     }
 
     private function enqueue_assets(): void {
