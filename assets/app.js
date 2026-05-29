@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.10';
+    const SCRIPT_BUILD = '20260529.11';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -2100,6 +2100,13 @@
             body.append(element('div', { className: 'wcc-companion-timing', text: timing }));
         }
 
+        if (step.type === 'session' && step.session) {
+            const notes = renderSessionNotes(step.session, { compact: true });
+            if (notes) {
+                body.append(notes);
+            }
+        }
+
         item.append(marker, body);
 
         return item;
@@ -2137,6 +2144,11 @@
             const speakers = renderSessionSpeakers(session, 'wcc-session-speakers wcc-choice-speakers');
             if (speakers) {
                 item.append(speakers);
+            }
+
+            const notes = renderSessionNotes(session, { compact: true });
+            if (notes) {
+                item.append(notes);
             }
 
             wrapper.append(item);
