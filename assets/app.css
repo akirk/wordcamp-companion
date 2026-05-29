@@ -68,12 +68,12 @@ a:focus-visible {
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
     overflow-x: auto;
-}
-
-.wcc-app.is-live-companion .wcc-debug-clock {
     width: min(1180px, calc(100vw - 24px));
-    margin-left: 50%;
-    transform: translateX(-50%);
+    margin-left: auto;
+    margin-right: auto;
+}
+ .wcc-debug-clock * {
+    text-transform: none;
 }
 
 .wcc-debug-clock strong {
@@ -92,17 +92,19 @@ a:focus-visible {
     white-space: nowrap;
 }
 
-.wcc-debug-play {
+.wcc-debug-play, #wcc-debug-reset {
     flex: 0 0 auto;
     min-height: 30px;
     padding: 4px 10px;
-    color: var(--wcc-primary-contrast);
-    background: var(--wcc-primary);
-    border: 1px solid var(--wcc-primary);
     border-radius: 999px;
     cursor: pointer;
     font-size: 0.84rem;
     font-weight: 700;
+}
+.wcc-debug-play {
+    border: 1px solid var(--wcc-primary);
+    color: var(--wcc-primary-contrast);
+    background: var(--wcc-primary);
 }
 
 .wcc-debug-play[aria-pressed="true"] {
@@ -117,6 +119,7 @@ a:focus-visible {
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+    height: 20px;
 }
 
 .wcc-debug-rate span {
@@ -127,6 +130,7 @@ a:focus-visible {
 
 .wcc-debug-rate input {
     width: 118px;
+    -webkit-appearance: auto;
 }
 
 .wcc-debug-rate strong {
@@ -807,6 +811,8 @@ a:focus-visible {
 }
 
 .wcc-companion-marker {
+    min-height: auto;
+    letter-spacing: normal;
     width: 14px;
     height: 14px;
     margin: 5px auto 0;
