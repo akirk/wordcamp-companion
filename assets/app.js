@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.4';
+    const SCRIPT_BUILD = '20260529.5';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -14,6 +14,7 @@
         loadingEvents: false,
         loadingSchedule: false,
         loadingGapKey: '',
+        loadingInitialGaps: false,
         loadedGapKeys: {},
         openGapKey: '',
         companionVisibleStepKeys: null,
@@ -245,7 +246,13 @@
         if (state.page === 'companion' && state.selectedEventUrl) {
             state.schedule = buildLocalCompanionSchedule();
         }
+        if (shouldLoadInitialCompanionGaps()) {
+            state.loadingInitialGaps = true;
+        }
         render();
+        if (state.loadingInitialGaps) {
+            loadInitialCompanionGaps();
+        }
 
         try {
             let handledRequestedEvent = false;
@@ -341,6 +348,9 @@
             if (state.view === 'companion') {
                 state.schedule = buildLocalCompanionSchedule();
                 resetCompanionAnimationState();
+                if (shouldLoadInitialCompanionGaps()) {
+                    loadInitialCompanionGaps();
+                }
             } else {
                 await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
             }
@@ -496,7 +506,7 @@
             }
         });
 
-        if (!Object.keys(days).length && event && event.start) {
+        if (!Object.keys(days).length && event && event.start && sessions && sessions.length) {
             const eventStart = Number(event.start || 0);
             const eventEnd = Number(event.end || eventStart);
             const startDayKey = getDateKey(eventStart, timeZone);
@@ -610,6 +620,51 @@
             state.alert = { type: 'error', message: error.message };
         } finally {
             state.loadingGapKey = '';
+            render();
+        }
+    }
+
+    function shouldLoadInitialCompanionGaps() {
+        return state.page === 'companion' &&
+            Boolean(state.selectedEventUrl) &&
+            Boolean(state.schedule) &&
+            state.view === 'companion' &&
+            getSavedSessionIds().size === 0 &&
+            !state.loadingInitialGaps &&
+            !state.schedule.gaps_loaded;
+    }
+
+    async function loadInitialCompanionGaps() {
+        if (!state.selectedEventUrl || !state.schedule || state.schedule.gaps_loaded) {
+            state.loadingInitialGaps = false;
+            return;
+        }
+
+        state.loadingInitialGaps = true;
+        render();
+
+        try {
+            const data = await api('gap-candidates', {
+                query: {
+                    event_url: state.selectedEventUrl,
+                    refresh: '0',
+                },
+            });
+            syncSelectedEventScheduleMetadata(data);
+            state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
+            state.schedule.gaps = Array.isArray(data.gaps) ? data.gaps.filter(hasGapCandidates) : [];
+            state.schedule.gaps_loaded = true;
+            state.schedule.timezone = data.timezone || state.schedule.timezone || '';
+            state.schedule.site_name = data.site_name || state.schedule.site_name || '';
+            state.loadedGapKeys = {};
+            state.schedule.gaps.forEach(function (gap) {
+                state.loadedGapKeys[getGapKey(gap)] = true;
+            });
+            state.alert = null;
+        } catch (error) {
+            state.alert = { type: 'error', message: error.message };
+        } finally {
+            state.loadingInitialGaps = false;
             render();
         }
     }
@@ -1192,6 +1247,12 @@
 
         if (state.loadingSchedule) {
             nodes.status.textContent = 'Loading schedule...';
+            return;
+        }
+
+        if (state.page === 'companion' && state.loadingInitialGaps && getSavedSessionIds().size === 0) {
+            nodes.status.textContent = 'Loading session choices...';
+            nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Loading session choices...' }));
             return;
         }
 
@@ -2316,20 +2377,18 @@
                         mapLinks: getEventMapLinks(event),
                     });
 
-                    if (savedSessions.length) {
-                        getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
-                            steps.push({
-                                type: 'gap',
-                                dayKey: group.key,
-                                start: gap.start,
-                                end: gap.end,
-                                title: 'Add a session',
-                                detail: '',
-                                meta: formatSessionTime(gap, timeZone),
-                                candidates: gap.candidates || [],
-                            });
+                    getEmptyDayGapsForDay(group.key, dayStartFromSchedule, dayEndFromSchedule).forEach(function (gap) {
+                        steps.push({
+                            type: 'gap',
+                            dayKey: group.key,
+                            start: gap.start,
+                            end: gap.end,
+                            title: 'Add a session',
+                            detail: '',
+                            meta: formatSessionTime(gap, timeZone),
+                            candidates: gap.candidates || [],
                         });
-                    }
+                    });
 
                     const isFinalEmptyDay = scheduleDayKeys.length
                         ? scheduleDayIndex === scheduleDayKeys.length - 1
@@ -2375,6 +2434,19 @@
                 const dayEnd = dayEndFromSchedule || plannedDayEnd;
 
                 if (dayEnd) {
+                    getEmptyDayGapsForDay(group.key, dayStart, dayEnd).forEach(function (gap) {
+                        steps.push({
+                            type: 'gap',
+                            dayKey: group.key,
+                            start: gap.start,
+                            end: gap.end,
+                            title: 'Add a session',
+                            detail: '',
+                            meta: formatSessionTime(gap, timeZone),
+                            candidates: gap.candidates || [],
+                        });
+                    });
+
                     const isFinalDay = scheduleDayKeys.length
                         ? scheduleDayIndex === scheduleDayKeys.length - 1
                         : dayIndex + 1 >= dayGroups.length;
@@ -3701,7 +3773,7 @@
         return lazyGaps.filter(function (gap) {
             const gapKey = getGapKey(gap);
             if (!isGapLoaded(gapKey)) {
-                return true;
+                return !state.schedule.gaps_loaded;
             }
 
             return hasGapCandidates(loadedGaps.get(gapKey));

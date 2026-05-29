@@ -235,9 +235,9 @@ class RestController {
         $days = $this->get_schedule_days( $schedule );
         $this->repository->store_schedule_metadata( $event_url, $schedule, $days );
         $requested_gap = $this->get_requested_gap( $request );
-        $gaps = $saved_session_ids
-            ? ( $requested_gap ? $this->get_gap_candidates_for_requested_gap( $schedule, $saved_session_ids, $requested_gap ) : $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids ) )
-            : [];
+        $gaps = $requested_gap
+            ? $this->get_gap_candidates_for_requested_gap( $schedule, $saved_session_ids, $requested_gap )
+            : $this->get_gap_candidates_for_saved_sessions( $schedule, $saved_session_ids );
 
         return rest_ensure_response(
             [
