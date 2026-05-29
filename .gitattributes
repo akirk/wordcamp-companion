@@ -1,0 +1,30 @@
+# Git/CI
+.git* export-ignore
+.github export-ignore
+.github/** export-ignore
+
+# IDE/Editor
+.vscode export-ignore
+.vscode/** export-ignore
+.claude export-ignore
+.claude/** export-ignore
+.agents export-ignore
+.agents/** export-ignore
+.codex export-ignore
+.codex/** export-ignore
+
+# Testing/Dev
+.phpunit.* export-ignore
+phpunit.xml export-ignore
+phpunit.xml.dist export-ignore
+phpcs.xml export-ignore
+phpcs.xml.dist export-ignore
+tests export-ignore
+bin export-ignore
+
+# Build metadata
+package-lock.json export-ignore
+node_modules export-ignore
+
+# Misc
+.DS_Store export-ignore

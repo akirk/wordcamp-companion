@@ -22,6 +22,7 @@ class PlannerRepository {
     private const SCHEDULE_SITE_NAME_META_KEY = 'wcc_schedule_site_name';
 
     private WordCampApi $api;
+    private array $saved_sessions_cache = [];
 
     public function __construct( WordCampApi $api ) {
         $this->api = $api;
@@ -365,27 +366,9 @@ class PlannerRepository {
     }
 
     private function get_wordcamp_term_id_by_event_url( string $event_url ): int {
-        $terms = get_terms(
-            [
-                'taxonomy'   => self::TAXONOMY,
-                'hide_empty' => false,
-                'number'     => 1,
-                'fields'     => 'ids',
-                'meta_query' => [
-                    [
-                        'key'   => self::EVENT_URL_META_KEY,
-                        'value' => $event_url,
-                    ],
-                ],
-            ]
-        );
+        $term = get_term_by( 'slug', $this->get_wordcamp_term_slug( $event_url ), self::TAXONOMY );
 
-        if ( is_wp_error( $terms ) || empty( $terms ) ) {
-            $term = get_term_by( 'slug', $this->get_wordcamp_term_slug( $event_url ), self::TAXONOMY );
-            return $term && ! is_wp_error( $term ) ? absint( $term->term_id ) : 0;
-        }
-
-        return absint( $terms[0] );
+        return $term && ! is_wp_error( $term ) ? absint( $term->term_id ) : 0;
     }
 
     private function get_wordcamp_term_slug( string $event_url ): string {
@@ -574,25 +557,10 @@ class PlannerRepository {
     }
 
     private function get_saved_wordcamp_term_ids( int $user_id ): array {
-        $query = new WP_Query(
-            [
-                'post_type'      => self::POST_TYPE,
-                'post_status'    => [ 'publish', 'private' ],
-                'author'         => $user_id,
-                'posts_per_page' => -1,
-                'fields'         => 'ids',
-                'tax_query'      => [
-                    [
-                        'taxonomy' => self::TAXONOMY,
-                        'operator' => 'EXISTS',
-                    ],
-                ],
-            ]
-        );
         $term_ids = [];
 
-        foreach ( array_map( 'absint', $query->posts ) as $post_id ) {
-            foreach ( wp_get_object_terms( $post_id, self::TAXONOMY, [ 'fields' => 'ids' ] ) as $term_id ) {
+        foreach ( $this->get_all_saved_session_posts( $user_id ) as $session ) {
+            foreach ( $this->get_saved_session_wordcamp_term_ids( $session ) as $term_id ) {
                 $term_id = absint( $term_id );
                 if ( $term_id && ! in_array( $term_id, $term_ids, true ) ) {
                     $term_ids[] = $term_id;
@@ -632,27 +600,39 @@ class PlannerRepository {
     }
 
     private function get_saved_session_posts( int $user_id, int $term_id ): array {
+        $sessions = array_values(
+            array_filter(
+                $this->get_all_saved_session_posts( $user_id ),
+                function ( array $session ) use ( $term_id ): bool {
+                    return in_array( $term_id, $this->get_saved_session_wordcamp_term_ids( $session ), true );
+                }
+            )
+        );
+
+        usort( $sessions, [ $this, 'compare_saved_sessions_by_start' ] );
+
+        return $sessions;
+    }
+
+    private function get_all_saved_session_posts( int $user_id ): array {
+        if ( isset( $this->saved_sessions_cache[ $user_id ] ) ) {
+            return $this->saved_sessions_cache[ $user_id ];
+        }
+
         $query = new WP_Query(
             [
-                'post_type'      => self::POST_TYPE,
-                'post_status'    => [ 'publish', 'private' ],
-                'author'         => $user_id,
-                'posts_per_page' => -1,
-                'orderby'        => 'meta_value_num',
-                'meta_key'       => 'wcc_session_start',
-                'order'          => 'ASC',
-                'tax_query'      => [
-                    [
-                        'taxonomy' => self::TAXONOMY,
-                        'field'    => 'term_id',
-                        'terms'    => [ $term_id ],
-                    ],
-                ],
-                'fields'         => 'ids',
+                'post_type'              => self::POST_TYPE,
+                'post_status'            => [ 'publish', 'private' ],
+                'author'                 => $user_id,
+                'posts_per_page'         => -1,
+                'fields'                 => 'ids',
+                'no_found_rows'          => true,
+                'update_post_meta_cache' => true,
+                'update_post_term_cache' => true,
             ]
         );
 
-        return array_values(
+        $sessions = array_values(
             array_filter(
                 array_map(
                     function ( int $post_id ): array {
@@ -662,6 +642,12 @@ class PlannerRepository {
                 )
             )
         );
+
+        usort( $sessions, [ $this, 'compare_saved_sessions_by_start' ] );
+
+        $this->saved_sessions_cache[ $user_id ] = $sessions;
+
+        return $sessions;
     }
 
     private function compact_saved_session_post( int $post_id ): array {
@@ -674,6 +660,8 @@ class PlannerRepository {
             'post_id'        => $post_id,
             'session_id'     => $session_id,
             'event_url'      => esc_url_raw( (string) get_post_meta( $post_id, 'wcc_event_url', true ) ),
+            'wordcamp_term_id' => absint( get_post_meta( $post_id, 'wcc_wordcamp_term_id', true ) ),
+            'wordcamp_term_ids' => $this->get_saved_session_term_ids( $post_id ),
             'title'          => get_the_title( $post_id ),
             'url'            => esc_url_raw( (string) get_post_meta( $post_id, 'wcc_session_url', true ) ),
             'start'          => absint( get_post_meta( $post_id, 'wcc_session_start', true ) ),
@@ -686,6 +674,39 @@ class PlannerRepository {
             'notes'          => sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) ),
             'updated_at'     => absint( get_post_modified_time( 'U', true, $post_id ) ),
         ];
+    }
+
+    private function get_saved_session_term_ids( int $post_id ): array {
+        $terms = wp_get_object_terms( $post_id, self::TAXONOMY, [ 'fields' => 'ids' ] );
+
+        if ( is_wp_error( $terms ) ) {
+            return [];
+        }
+
+        return array_values( array_filter( array_map( 'absint', $terms ) ) );
+    }
+
+    private function get_saved_session_wordcamp_term_ids( array $session ): array {
+        $term_ids = isset( $session['wordcamp_term_ids'] ) && is_array( $session['wordcamp_term_ids'] )
+            ? array_map( 'absint', $session['wordcamp_term_ids'] )
+            : [];
+
+        if ( ! empty( $session['wordcamp_term_id'] ) ) {
+            $term_ids[] = absint( $session['wordcamp_term_id'] );
+        }
+
+        return array_values( array_unique( array_filter( $term_ids ) ) );
+    }
+
+    private function compare_saved_sessions_by_start( array $a, array $b ): int {
+        $a_start = ! empty( $a['start'] ) ? absint( $a['start'] ) : PHP_INT_MAX;
+        $b_start = ! empty( $b['start'] ) ? absint( $b['start'] ) : PHP_INT_MAX;
+
+        if ( $a_start !== $b_start ) {
+            return $a_start <=> $b_start;
+        }
+
+        return strcasecmp( (string) ( $a['title'] ?? '' ), (string) ( $b['title'] ?? '' ) );
     }
 
     private function split_meta_list( string $value ): array {
