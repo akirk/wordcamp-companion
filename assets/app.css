@@ -389,6 +389,17 @@ a:focus-visible {
     border-left-color: var(--wcc-danger);
 }
 
+.wcc-alert-message {
+    display: block;
+}
+
+.wcc-alert-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
 .wcc-content {
     display: grid;
     grid-template-columns: 310px minmax(0, 1fr);

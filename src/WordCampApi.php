@@ -32,7 +32,8 @@ class WordCampApi {
                     'per_page' => 100,
                 ],
                 self::CENTRAL_WORDCAMPS_URL
-            )
+            ),
+            'central'
         );
 
         if ( is_wp_error( $response ) ) {
@@ -891,7 +892,7 @@ class WordCampApi {
         return $response['body'];
     }
 
-    private function request_json( string $url ) {
+    private function request_json( string $url, string $source = 'site' ) {
         $response = wp_remote_get(
             $url,
             [
@@ -907,15 +908,7 @@ class WordCampApi {
 
         $status = wp_remote_retrieve_response_code( $response );
         if ( $status < 200 || $status >= 300 ) {
-            return new WP_Error(
-                'wordcamp_companion_remote_error',
-                sprintf(
-                    /* translators: %d: HTTP response status code. */
-                    __( 'The WordCamp site returned HTTP %d.', 'wordcamp-companion' ),
-                    $status
-                ),
-                [ 'status' => 502 ]
-            );
+            return $this->get_remote_http_error( $status, $source );
         }
 
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -931,6 +924,53 @@ class WordCampApi {
             'body'     => $body,
             'response' => $response,
         ];
+    }
+
+    private function get_remote_http_error( int $status, string $source ): WP_Error {
+        $is_access_denied = in_array( $status, [ 401, 403 ], true );
+        $data             = [
+            'status'        => 502,
+            'remote_status' => $status,
+            'remote_source' => $source,
+        ];
+
+        if ( 'central' === $source ) {
+            if ( $is_access_denied ) {
+                return new WP_Error(
+                    'wordcamp_companion_central_access_denied',
+                    __( 'WordCamp Central is not allowing the event list to be loaded right now. Try refreshing the list again later.', 'wordcamp-companion' ),
+                    $data
+                );
+            }
+
+            return new WP_Error(
+                'wordcamp_companion_central_remote_error',
+                sprintf(
+                    /* translators: %d: HTTP response status code. */
+                    __( 'WordCamp Central returned HTTP %d while loading the event list.', 'wordcamp-companion' ),
+                    $status
+                ),
+                $data
+            );
+        }
+
+        if ( $is_access_denied ) {
+            return new WP_Error(
+                'wordcamp_companion_schedule_access_denied',
+                __( 'This WordCamp is not allowing schedule data to load here right now. Open the event site for the published schedule, or try again later.', 'wordcamp-companion' ),
+                $data
+            );
+        }
+
+        return new WP_Error(
+            'wordcamp_companion_remote_error',
+            sprintf(
+                /* translators: %d: HTTP response status code. */
+                __( 'The WordCamp schedule service returned HTTP %d.', 'wordcamp-companion' ),
+                $status
+            ),
+            $data
+        );
     }
 
     private function rest_route_exists( array $index, string $route ): bool {
