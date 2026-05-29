@@ -15,10 +15,11 @@ class WordCampApi {
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_SCHEMA_VERSION = 4;
     private const MAX_COLLECTION_PAGES = 20;
+    private const STALE_CACHE_OPTION_PREFIX = 'wordcamp_companion_stale_';
 
     public function get_wordcamps( bool $force_refresh = false ) {
         if ( ! $force_refresh ) {
-            $cached = get_transient( self::WORDCAMPS_CACHE_KEY );
+            $cached = $this->get_cached_payload( self::WORDCAMPS_CACHE_KEY );
             if ( false !== $cached ) {
                 return $cached;
             }
@@ -35,15 +36,17 @@ class WordCampApi {
         );
 
         if ( is_wp_error( $response ) ) {
-            return $response;
+            return $this->get_cached_payload_or_error( self::WORDCAMPS_CACHE_KEY, $response );
         }
 
         if ( ! is_array( $response['body'] ) ) {
-            return new WP_Error(
+            $error = new WP_Error(
                 'wordcamp_companion_invalid_wordcamps',
                 __( 'WordCamp Central returned an unexpected response.', 'wordcamp-companion' ),
                 [ 'status' => 502 ]
             );
+
+            return $this->get_cached_payload_or_error( self::WORDCAMPS_CACHE_KEY, $error );
         }
 
         $wordcamps = [];
@@ -73,7 +76,7 @@ class WordCampApi {
             'fetched_at' => time(),
         ];
 
-        set_transient( self::WORDCAMPS_CACHE_KEY, $payload, self::WORDCAMPS_CACHE_TTL );
+        $this->cache_payload( self::WORDCAMPS_CACHE_KEY, $payload, self::WORDCAMPS_CACHE_TTL );
 
         return $payload;
     }
@@ -91,7 +94,7 @@ class WordCampApi {
 
         $cache_key = 'wordcamp_companion_schedule_' . md5( self::SCHEDULE_CACHE_SCHEMA_VERSION . ':' . $event_url );
         if ( ! $force_refresh ) {
-            $cached = get_transient( $cache_key );
+            $cached = $this->get_cached_payload( $cache_key );
             if ( false !== $cached ) {
                 return $cached;
             }
@@ -99,7 +102,7 @@ class WordCampApi {
 
         $rest_index = $this->request_json( trailingslashit( $event_url ) . 'wp-json/' );
         if ( is_wp_error( $rest_index ) ) {
-            return $rest_index;
+            return $this->get_cached_payload_or_error( $cache_key, $rest_index );
         }
 
         $index = is_array( $rest_index['body'] ) ? $rest_index['body'] : [];
@@ -113,13 +116,15 @@ class WordCampApi {
 
         $sessions = $this->get_rest_collection( trailingslashit( $event_url ) . 'wp-json/wp/v2/sessions' );
         if ( is_wp_error( $sessions ) ) {
-            return $sessions;
+            return $this->get_cached_payload_or_error( $cache_key, $sessions );
         }
 
+        $partial_error = null;
         $speakers = $this->rest_route_exists( $index, '/wp/v2/speakers' )
             ? $this->get_rest_collection( trailingslashit( $event_url ) . 'wp-json/wp/v2/speakers' )
             : [];
         if ( is_wp_error( $speakers ) ) {
+            $partial_error = $speakers;
             $speakers = [];
         }
 
@@ -127,6 +132,7 @@ class WordCampApi {
             ? $this->get_rest_collection( trailingslashit( $event_url ) . 'wp-json/wp/v2/session_track' )
             : [];
         if ( is_wp_error( $tracks ) ) {
+            $partial_error = $tracks;
             $tracks = [];
         }
 
@@ -134,7 +140,15 @@ class WordCampApi {
             ? $this->get_rest_collection( trailingslashit( $event_url ) . 'wp-json/wp/v2/session_category' )
             : [];
         if ( is_wp_error( $categories ) ) {
+            $partial_error = $categories;
             $categories = [];
+        }
+
+        if ( $partial_error ) {
+            $cached = $this->get_fallback_cached_payload( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
         }
 
         $normalized_speakers = $this->normalize_speakers( $speakers );
@@ -153,7 +167,7 @@ class WordCampApi {
             'fetched_at'  => time(),
         ];
 
-        set_transient( $cache_key, $payload, self::SCHEDULE_CACHE_TTL );
+        $this->cache_payload( $cache_key, $payload, self::SCHEDULE_CACHE_TTL );
 
         return $payload;
     }
@@ -198,7 +212,7 @@ class WordCampApi {
 
         $cache_key = 'wordcamp_companion_schedule_companion_' . md5( self::COMPANION_CACHE_SCHEMA_VERSION . ':' . $event_url . ':' . implode( ',', $session_ids ) . ':' . absint( $cache_version ) );
         if ( ! $force_refresh ) {
-            $cached = get_transient( $cache_key );
+            $cached = $this->get_cached_payload( $cache_key );
             if ( false !== $cached ) {
                 return $cached;
             }
@@ -206,28 +220,40 @@ class WordCampApi {
 
         $context = $this->get_companion_context( $event_url );
         if ( is_wp_error( $context ) ) {
-            return $context;
+            return $this->get_cached_payload_or_error( $cache_key, $context );
         }
 
         $start_sessions = $this->get_companion_start_sessions( $context['event_url'] );
         if ( is_wp_error( $start_sessions ) ) {
-            return $start_sessions;
+            return $this->get_cached_payload_or_error( $cache_key, $start_sessions );
         }
 
         $sessions = $this->get_companion_session_subset( $context['event_url'], $session_ids );
         if ( is_wp_error( $sessions ) ) {
-            return $sessions;
+            return $this->get_cached_payload_or_error( $cache_key, $sessions );
         }
 
         $sessions = $this->merge_sessions_by_id( $start_sessions, $sessions );
         $days = $this->get_companion_day_bounds( $context['event_url'], $context['timezone'] );
         if ( is_wp_error( $days ) ) {
+            $cached = $this->get_fallback_cached_payload( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
+
             $days = [];
         }
 
         $tracks = $this->get_companion_tracks( $context );
-        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
         $speakers = $this->get_companion_speakers( $context );
+        if ( is_wp_error( $tracks ) || is_wp_error( $speakers ) ) {
+            $cached = $this->get_fallback_cached_payload( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
+        }
+
+        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
         $normalized_speakers = is_wp_error( $speakers ) ? [] : $this->normalize_speakers( $speakers );
 
         $payload = [
@@ -241,7 +267,7 @@ class WordCampApi {
             'fetched_at' => time(),
         ];
 
-        set_transient( $cache_key, $payload, self::COMPANION_CACHE_TTL );
+        $this->cache_payload( $cache_key, $payload, self::COMPANION_CACHE_TTL );
 
         return $payload;
     }
@@ -259,7 +285,7 @@ class WordCampApi {
 
         $cache_key = 'wordcamp_companion_schedule_candidates_' . md5( self::COMPANION_CACHE_SCHEMA_VERSION . ':' . $event_url );
         if ( ! $force_refresh ) {
-            $cached = get_transient( $cache_key );
+            $cached = $this->get_cached_payload( $cache_key );
             if ( false !== $cached ) {
                 return $cached;
             }
@@ -267,17 +293,24 @@ class WordCampApi {
 
         $context = $this->get_companion_context( $event_url );
         if ( is_wp_error( $context ) ) {
-            return $context;
+            return $this->get_cached_payload_or_error( $cache_key, $context );
         }
 
         $sessions = $this->get_companion_all_sessions( $context['event_url'] );
         if ( is_wp_error( $sessions ) ) {
-            return $sessions;
+            return $this->get_cached_payload_or_error( $cache_key, $sessions );
         }
 
         $tracks = $this->get_companion_tracks( $context );
-        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
         $speakers = $this->get_companion_speakers( $context );
+        if ( is_wp_error( $tracks ) || is_wp_error( $speakers ) ) {
+            $cached = $this->get_fallback_cached_payload( $cache_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
+        }
+
+        $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
         $normalized_speakers = is_wp_error( $speakers ) ? [] : $this->normalize_speakers( $speakers );
 
         $payload = [
@@ -290,9 +323,50 @@ class WordCampApi {
             'fetched_at' => time(),
         ];
 
-        set_transient( $cache_key, $payload, self::COMPANION_CACHE_TTL );
+        $this->cache_payload( $cache_key, $payload, self::COMPANION_CACHE_TTL );
 
         return $payload;
+    }
+
+    private function get_cached_payload( string $cache_key ) {
+        $cached = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            $this->store_stale_payload( $cache_key, $cached );
+        }
+
+        return $cached;
+    }
+
+    private function cache_payload( string $cache_key, array $payload, int $ttl ): void {
+        set_transient( $cache_key, $payload, $ttl );
+        $this->store_stale_payload( $cache_key, $payload );
+    }
+
+    private function get_cached_payload_or_error( string $cache_key, WP_Error $error ) {
+        $cached = $this->get_fallback_cached_payload( $cache_key );
+
+        return false !== $cached ? $cached : $error;
+    }
+
+    private function get_fallback_cached_payload( string $cache_key ) {
+        $cached = $this->get_cached_payload( $cache_key );
+        if ( false !== $cached ) {
+            return $cached;
+        }
+
+        return get_option( $this->get_stale_cache_option_name( $cache_key ), false );
+    }
+
+    private function store_stale_payload( string $cache_key, $payload ): void {
+        if ( ! is_array( $payload ) ) {
+            return;
+        }
+
+        update_option( $this->get_stale_cache_option_name( $cache_key ), $payload, false );
+    }
+
+    private function get_stale_cache_option_name( string $cache_key ): string {
+        return self::STALE_CACHE_OPTION_PREFIX . md5( $cache_key );
     }
 
     private function get_companion_context( string $event_url ) {

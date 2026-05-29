@@ -79,6 +79,7 @@ function wordcamp_companion_uninstall_delete_transients(): void {
 	$transient_option_prefixes = [
 		'_transient_wordcamp_companion_schedule_',
 		'_transient_timeout_wordcamp_companion_schedule_',
+		'wordcamp_companion_stale_',
 	];
 
 	foreach ( $transient_option_prefixes as $prefix ) {
