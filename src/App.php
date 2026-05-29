@@ -47,6 +47,7 @@ class App extends BaseApp {
         $this->app->route( 'notes', 'notes.php' );
         $this->app->route( 'plan-your', 'plan-your.php' );
         $this->app->route( 'plan-your/{wordcamp}', 'plan.php' );
+        $this->app->route( 'settings', 'settings.php' );
     }
 
     protected function setup_menu(): void {
@@ -57,13 +58,18 @@ class App extends BaseApp {
         );
         $this->app->add_menu_item(
             'wordcamp-companion-wordcamps',
-            'WordCamps',
+            'Upcoming WordCamps',
             home_url( '/' . $this->get_url_path() . '/plan-your/' )
         );
         $this->app->add_menu_item(
             'wordcamp-companion-notes',
             'Notes',
             home_url( '/' . $this->get_url_path() . '/notes/' )
+        );
+        $this->app->add_menu_item(
+            'wordcamp-companion-settings',
+            'Settings',
+            home_url( '/' . $this->get_url_path() . '/settings/' )
         );
     }
 
@@ -110,7 +116,8 @@ class App extends BaseApp {
                         'assetVersion'            => $asset_version,
                         'timeFormat'              => get_option( 'time_format' ),
                         'uses24HourTime'          => ! preg_match( '/[ga]/i', (string) get_option( 'time_format' ) ),
-                        'initialPlan'             => is_user_logged_in() ? $this->repository->get_plan( get_current_user_id() ) : null,
+                        'settings'                => UserSettings::get_settings( get_current_user_id() ),
+                        'initialPlan'             => $this->repository->get_plan( get_current_user_id() ),
                         'savedSessionRestBase'    => PlannerRepository::POST_REST_BASE,
                         'wordcampTaxonomyRestBase' => PlannerRepository::TAXONOMY_REST_BASE,
                     ]

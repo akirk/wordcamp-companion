@@ -10,7 +10,7 @@
     <?php wp_app_body_open(); ?>
 
     <main id="wordcamp-companion-app" class="wcc-app is-focused is-live-companion" data-page="companion">
-        <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>">
+        <section id="wcc-debug-clock" class="wcc-debug-clock" aria-label="<?php echo esc_attr__( 'Debug time simulator', 'wordcamp-companion' ); ?>" <?php echo \WordCampCompanion\UserSettings::is_debug_clock_enabled( get_current_user_id() ) ? '' : 'hidden'; ?>>
             <div>
                 <span class="wcc-kicker"><?php echo esc_html__( 'Debug Time', 'wordcamp-companion' ); ?></span>
                 <strong id="wcc-debug-current"></strong>

@@ -140,6 +140,23 @@ class RestController {
             ]
         );
 
+        register_rest_route(
+            self::NAMESPACE,
+            '/settings',
+            [
+                [
+                    'methods'             => 'GET',
+                    'callback'            => [ $this, 'get_settings' ],
+                    'permission_callback' => [ $this, 'can_read' ],
+                ],
+                [
+                    'methods'             => 'POST',
+                    'callback'            => [ $this, 'save_settings' ],
+                    'permission_callback' => [ $this, 'can_read' ],
+                ],
+            ]
+        );
+
     }
 
     public function can_read(): bool {
@@ -755,6 +772,16 @@ class RestController {
         }
 
         return rest_ensure_response( $plan );
+    }
+
+    public function get_settings(): \WP_REST_Response {
+        return rest_ensure_response( UserSettings::get_settings( get_current_user_id() ) );
+    }
+
+    public function save_settings( WP_REST_Request $request ): \WP_REST_Response {
+        $params = $this->get_request_params( $request );
+
+        return rest_ensure_response( UserSettings::update_settings( get_current_user_id(), $params ) );
     }
 
     private function get_request_params( WP_REST_Request $request ): array {

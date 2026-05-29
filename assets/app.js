@@ -1,10 +1,11 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.1';
+    const SCRIPT_BUILD = '20260529.2';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
         plan: { selected_event_url: '', plans: {} },
+        settings: { show_debug_clock: true },
         schedule: null,
         selectedEventUrl: '',
         page: 'companion',
@@ -23,6 +24,9 @@
         savingNotePostId: null,
         noteDrafts: {},
         notesExportCopied: false,
+        savingSettings: false,
+        settingsSaved: false,
+        settingsDraft: null,
         debugOffsetSeconds: 0,
         debugPlaying: false,
         debugRate: 300,
@@ -64,6 +68,9 @@
         nodes.notesEventSelect = document.getElementById('wcc-notes-event-select');
         nodes.notesPlanLink = document.getElementById('wcc-notes-plan-link');
         nodes.planNotesLink = document.getElementById('wcc-plan-notes-link');
+        nodes.settingsDebugClock = document.getElementById('wcc-setting-debug-clock');
+        nodes.settingsSave = document.getElementById('wcc-settings-save');
+        nodes.settingsStatus = document.getElementById('wcc-settings-status');
         nodes.refreshEvents = document.getElementById('wcc-refresh-events');
         nodes.refreshSchedule = document.getElementById('wcc-refresh-schedule');
         nodes.alerts = document.getElementById('wcc-alerts');
@@ -187,6 +194,26 @@
             });
         }
 
+        if (nodes.settingsSave) {
+            nodes.settingsSave.addEventListener('click', function () {
+                saveSettings({
+                    show_debug_clock: Boolean(nodes.settingsDebugClock && nodes.settingsDebugClock.checked),
+                });
+            });
+        }
+
+        if (nodes.settingsDebugClock) {
+            nodes.settingsDebugClock.addEventListener('change', function () {
+                state.settingsDraft = {
+                    show_debug_clock: Boolean(nodes.settingsDebugClock.checked),
+                };
+                state.settingsSaved = false;
+                if (nodes.settingsStatus) {
+                    nodes.settingsStatus.textContent = '';
+                }
+            });
+        }
+
         nodes.tabs.forEach(function (tab) {
             tab.addEventListener('click', function () {
                 state.view = tab.dataset.view || 'schedule';
@@ -210,6 +237,7 @@
 
         state.loadingEvents = needsEvents;
         state.plan = normalizePlan(config.initialPlan);
+        state.settings = normalizeSettings(config.settings);
         state.selectedEventUrl = state.page === 'plan-selector'
             ? ''
             : (state.page === 'notes' ? getDefaultNotesEventUrl() : (state.plan.selected_event_url || ''));
@@ -680,6 +708,40 @@
         }
     }
 
+    async function saveSettings(settings) {
+        if (state.savingSettings) {
+            return;
+        }
+
+        state.savingSettings = true;
+        state.settingsSaved = false;
+        state.alert = null;
+        render();
+
+        try {
+            state.settings = normalizeSettings(await api('settings', {
+                method: 'POST',
+                body: settings,
+            }));
+
+            if (!isDebugClockEnabled()) {
+                state.debugPlaying = false;
+                state.debugOffsetSeconds = 0;
+                state.debugLastTick = null;
+            }
+
+            state.settingsSaved = true;
+            state.settingsDraft = null;
+            state.alert = null;
+            restartClock();
+        } catch (error) {
+            state.alert = { type: 'error', message: error.message };
+        } finally {
+            state.savingSettings = false;
+            render();
+        }
+    }
+
     async function api(path, options) {
         options = options || {};
         return requestJson(config.restUrl, path, options, true);
@@ -739,6 +801,7 @@
             renderSelectedEvent();
             renderControls();
             renderNotesControls();
+            renderSettingsControls();
             renderEvents();
             renderTabs();
             renderSchedule();
@@ -748,7 +811,9 @@
     }
 
     function renderDebugClock() {
-        if (!nodes.debugCurrent || !nodes.debugPlay || !nodes.debugRateLabel) {
+        setHidden(nodes.debugClock, !isDebugClockEnabled());
+
+        if (!isDebugClockEnabled() || !nodes.debugCurrent || !nodes.debugPlay || !nodes.debugRateLabel) {
             return;
         }
 
@@ -957,6 +1022,30 @@
 
         nodes.notesEventSelect.replaceChildren(fragment);
         nodes.notesEventSelect.value = state.selectedEventUrl || '';
+    }
+
+    function renderSettingsControls() {
+        if (!nodes.settingsDebugClock && !nodes.settingsSave && !nodes.settingsStatus) {
+            return;
+        }
+
+        if (nodes.settingsDebugClock) {
+            const draftValue = state.settingsDraft && typeof state.settingsDraft.show_debug_clock === 'boolean'
+                ? state.settingsDraft.show_debug_clock
+                : isDebugClockEnabled();
+
+            nodes.settingsDebugClock.checked = draftValue;
+            nodes.settingsDebugClock.disabled = state.savingSettings;
+        }
+
+        if (nodes.settingsSave) {
+            nodes.settingsSave.disabled = state.savingSettings;
+            nodes.settingsSave.textContent = state.savingSettings ? 'Saving...' : 'Save Settings';
+        }
+
+        if (nodes.settingsStatus) {
+            nodes.settingsStatus.textContent = state.settingsSaved ? 'Saved' : '';
+        }
     }
 
     function renderEvents() {
@@ -2745,7 +2834,7 @@
     }
 
     function getClockDelay() {
-        if (state.debugPlaying) {
+        if (isDebugClockEnabled() && state.debugPlaying) {
             return Math.max(50, Math.round(60000 / Math.max(1, state.debugRate)));
         }
 
@@ -2754,11 +2843,11 @@
     }
 
     function getNow() {
-        return Math.floor(Date.now() / 1000) + state.debugOffsetSeconds;
+        return Math.floor(Date.now() / 1000) + (isDebugClockEnabled() ? state.debugOffsetSeconds : 0);
     }
 
     function updateDebugPlayback() {
-        if (!state.debugPlaying) {
+        if (!isDebugClockEnabled() || !state.debugPlaying) {
             state.debugLastTick = null;
             return;
         }
@@ -2774,12 +2863,20 @@
     }
 
     function jumpDebugTime(minutes) {
+        if (!isDebugClockEnabled()) {
+            return;
+        }
+
         state.debugOffsetSeconds += minutes * 60;
         state.debugLastTick = Date.now();
         render();
     }
 
     async function setDebugTimeToWordCampStart() {
+        if (!isDebugClockEnabled()) {
+            return;
+        }
+
         let start = getFirstCompanionStart();
 
         if (!start && state.selectedEventUrl && !state.loadingSchedule) {
@@ -3938,6 +4035,16 @@
             saved_session_posts: plan && Array.isArray(plan.saved_session_posts) ? plan.saved_session_posts : [],
             plans: plans,
         };
+    }
+
+    function normalizeSettings(settings) {
+        return {
+            show_debug_clock: !settings || settings.show_debug_clock !== false,
+        };
+    }
+
+    function isDebugClockEnabled() {
+        return Boolean(state.settings && state.settings.show_debug_clock);
     }
 
     function element(tag, options) {

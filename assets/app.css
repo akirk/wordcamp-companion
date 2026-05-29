@@ -402,6 +402,61 @@ a:focus-visible {
     margin-top: 6px;
 }
 
+.wcc-settings {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
+}
+
+.wcc-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.wcc-setting-row h2,
+.wcc-setting-row p {
+    margin: 0;
+}
+
+.wcc-setting-row h2 {
+    font-size: 1.05rem;
+}
+
+.wcc-setting-row p,
+.wcc-settings-status {
+    color: var(--wcc-muted);
+}
+
+.wcc-setting-row p {
+    margin-top: 5px;
+}
+
+.wcc-settings-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wcc-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    color: var(--wcc-text);
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.wcc-switch input {
+    width: 18px;
+    height: 18px;
+}
+
 .wcc-count {
     color: var(--wcc-muted);
     font-size: 0.86rem;
@@ -1358,6 +1413,12 @@ a:focus-visible {
 
     .wcc-notes-header-side {
         justify-items: start;
+    }
+
+    .wcc-setting-row,
+    .wcc-settings-actions {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .wcc-selected-actions {
