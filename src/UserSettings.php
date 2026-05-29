@@ -2,6 +2,8 @@
 
 namespace WordCampCompanion;
 
+defined( 'ABSPATH' ) || exit;
+
 class UserSettings {
     private const DEBUG_CLOCK_META_KEY = 'wordcamp_companion_show_debug_clock';
 

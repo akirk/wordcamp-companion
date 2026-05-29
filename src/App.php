@@ -5,6 +5,8 @@ namespace WordCampCompanion;
 use WpApp\BaseApp;
 use WpApp\WpApp;
 
+defined( 'ABSPATH' ) || exit;
+
 class App extends BaseApp {
     private WordCampApi $api;
     private PlannerRepository $repository;

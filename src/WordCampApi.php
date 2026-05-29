@@ -4,6 +4,8 @@ namespace WordCampCompanion;
 
 use WP_Error;
 
+defined( 'ABSPATH' ) || exit;
+
 class WordCampApi {
     private const CENTRAL_WORDCAMPS_URL = 'https://central.wordcamp.org/wp-json/wp/v2/wordcamps';
     private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v4';

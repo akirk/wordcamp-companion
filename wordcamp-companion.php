@@ -10,7 +10,6 @@
  * License: GPL2
  * License URI: http://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wordcamp-companion
- * Domain Path: /languages/
  */
 
 namespace WordCampCompanion;

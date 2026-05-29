@@ -5,6 +5,8 @@ namespace WordCampCompanion;
 use WP_Error;
 use WP_REST_Request;
 
+defined( 'ABSPATH' ) || exit;
+
 class RestController {
     private const NAMESPACE = 'wordcamp-companion/v1';
     private const SUBSTANTIAL_OVERLAP_SECONDS = 20 * MINUTE_IN_SECONDS;

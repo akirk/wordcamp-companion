@@ -5,6 +5,8 @@ namespace WordCampCompanion;
 use WP_Error;
 use WP_Query;
 
+defined( 'ABSPATH' ) || exit;
+
 class PlannerRepository {
     public const POST_TYPE = 'wcc_session';
     public const TAXONOMY = 'wcc_wordcamp';

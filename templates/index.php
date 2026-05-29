@@ -1,9 +1,12 @@
+<?php
+defined( 'ABSPATH' ) || exit;
+?>
 <!DOCTYPE html>
-<html <?php echo wp_app_language_attributes(); ?>>
+<html <?php echo wp_kses_data( wp_app_language_attributes() ); ?>>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo wp_app_title( 'WordCamp Companion' ); ?></title>
+    <title><?php echo esc_html( wp_app_title( 'WordCamp Companion' ) ); ?></title>
     <?php wp_app_head(); ?>
 </head>
 <body>
@@ -44,9 +47,9 @@
 
         <footer class="wcc-build">
             <?php
-            $asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : 'unknown';
+            $wordcamp_companion_asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : 'unknown';
             ?>
-            <?php echo esc_html__( 'Build', 'wordcamp-companion' ); ?> <?php echo esc_html( $asset_version ); ?> -
+            <?php echo esc_html__( 'Build', 'wordcamp-companion' ); ?> <?php echo esc_html( $wordcamp_companion_asset_version ); ?> -
             <span id="wcc-js-build"><?php echo esc_html__( 'JS not loaded', 'wordcamp-companion' ); ?></span>
         </footer>
     </main>
