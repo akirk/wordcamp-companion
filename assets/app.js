@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.16';
+    const SCRIPT_BUILD = '20260529.17';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -2086,8 +2086,8 @@
         const timeZone = getSelectedTimezone();
         const timeLabel = formatCompanionStepTime(step, timeZone);
         const label = getCompanionStepLabel(step, now, index, timeLabel);
-        const marker = element('div', { className: 'wcc-companion-marker' });
         const body = element('div', { className: 'wcc-companion-body' });
+        let gapPicker = null;
 
         if (isCurrent && step.type === 'session') {
             item.style.setProperty('--wcc-step-progress', getCompanionStepProgress(step, now) + '%');
@@ -2144,7 +2144,8 @@
         }
 
         if (step.type === 'gap') {
-            body.append(renderGapPicker(step));
+            gapPicker = renderGapPicker(step);
+            body.append(gapPicker);
         }
 
         const timing = formatCompanionTiming(step, now, timeZone, index);
@@ -2159,9 +2160,36 @@
             }
         }
 
+        const marker = renderCompanionMarker(step, gapPicker);
         item.append(marker, body);
 
         return item;
+    }
+
+    function renderCompanionMarker(step, gapPicker) {
+        if (step.type !== 'gap') {
+            return element('div', { className: 'wcc-companion-marker' });
+        }
+
+        const marker = element('button', {
+            className: 'wcc-companion-marker',
+            type: 'button',
+            title: 'Add a session',
+            'aria-label': 'Add a session',
+        });
+
+        marker.addEventListener('click', function (event) {
+            const toggle = gapPicker ? gapPicker.querySelector('.wcc-gap-toggle') : null;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (toggle) {
+                toggle.click();
+            }
+        });
+
+        return marker;
     }
 
     function getCompanionStepProgress(step, now) {

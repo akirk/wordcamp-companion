@@ -959,16 +959,28 @@ a:focus-visible {
 .wcc-companion-step.is-break .wcc-companion-marker,
 .wcc-companion-step.is-day-end .wcc-companion-marker,
 .wcc-companion-step.is-gap .wcc-companion-marker {
+    appearance: none;
     position: relative;
     z-index: 1;
     display: grid;
     place-items: center;
     width: 24px;
     height: 24px;
+    padding: 0;
     margin-top: 2px;
     color: var(--wcc-warning);
+    font: inherit;
     background: var(--wcc-bg);
     border: 1px solid var(--wcc-border);
+}
+
+.wcc-companion-step.is-gap .wcc-companion-marker {
+    cursor: pointer;
+}
+
+.wcc-companion-step.is-gap .wcc-companion-marker:hover,
+.wcc-companion-step.is-gap .wcc-companion-marker:focus-visible {
+    border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 35%);
 }
 
 .wcc-companion-step.is-track::before,
