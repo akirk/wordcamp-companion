@@ -111,7 +111,10 @@ class PlannerRepository {
             return $this->empty_plan();
         }
 
-        $selected_plan = $this->get_next_companion_plan( $plans );
+        $selected_plan = $this->get_selected_companion_plan( $plans, $selected_term_id );
+        if ( ! $selected_plan ) {
+            $selected_plan = $this->get_next_companion_plan( $plans );
+        }
         if ( ! $selected_plan ) {
             return [
                 'selected_event_url'       => '',
@@ -156,6 +159,10 @@ class PlannerRepository {
         }
 
         update_user_meta( $user_id, self::SELECTED_TERM_META_KEY, $term_id );
+
+        $visibility_map = $this->get_companion_visibility_map( $user_id );
+        $visibility_map[ absint( $term_id ) ] = 1;
+        update_user_meta( $user_id, self::COMPANION_VISIBILITY_META_KEY, $visibility_map );
 
         return $this->get_plan( $user_id );
     }
@@ -460,6 +467,23 @@ class PlannerRepository {
         }
 
         return $plans;
+    }
+
+    private function get_selected_companion_plan( array $plans, int $selected_term_id ): array {
+        if ( ! $selected_term_id ) {
+            return [];
+        }
+
+        foreach ( $plans as $plan ) {
+            if (
+                ! empty( $plan['show_in_companion'] ) &&
+                $selected_term_id === absint( $plan['wordcamp_term_id'] ?? 0 )
+            ) {
+                return $plan;
+            }
+        }
+
+        return [];
     }
 
     private function get_next_companion_plan( array $plans ): array {

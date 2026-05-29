@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.11';
+    const SCRIPT_BUILD = '20260529.16';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -177,7 +177,7 @@
                 if (state.page === 'plan-selector') {
                     const selectedEvent = getEventByUrl(event.target.value);
                     if (selectedEvent) {
-                        window.location.href = getPlanYourDayUrl(selectedEvent);
+                        activatePlanSelectorEvent(selectedEvent);
                     }
                     return;
                 }
@@ -373,6 +373,7 @@
         state.loadedGapKeys = {};
         resetCompanionAnimationState();
         state.savingEvent = true;
+        state.savingCompanionEventUrl = event.event_url;
         state.alert = null;
         render();
 
@@ -400,6 +401,37 @@
             state.alert = getErrorAlert(error);
         } finally {
             state.savingEvent = false;
+            state.savingCompanionEventUrl = '';
+            render();
+        }
+    }
+
+    async function selectEventForMobileCompanion(event) {
+        if (!event || !event.event_url || state.savingEvent || state.savingCompanionEventUrl) {
+            return;
+        }
+
+        const previousSelectedEventUrl = state.selectedEventUrl;
+        const previousPlan = state.plan;
+
+        state.selectedEventUrl = event.event_url;
+        state.savingEvent = true;
+        state.savingCompanionEventUrl = event.event_url;
+        state.alert = null;
+        render();
+
+        try {
+            state.plan = normalizePlan(await api('plan/event', {
+                method: 'POST',
+                body: { event: event },
+            }));
+            window.location.href = getCompanionUrl();
+        } catch (error) {
+            state.selectedEventUrl = previousSelectedEventUrl;
+            state.plan = previousPlan;
+            state.alert = getErrorAlert(error);
+            state.savingEvent = false;
+            state.savingCompanionEventUrl = '';
             render();
         }
     }
@@ -1332,11 +1364,24 @@
 
     function activateEventCard(event) {
         if (state.page === 'plan-selector') {
-            window.location.href = getPlanYourDayUrl(event);
+            activatePlanSelectorEvent(event);
             return;
         }
 
         selectEvent(event.event_url);
+    }
+
+    function activatePlanSelectorEvent(event) {
+        if (!event || !event.event_url) {
+            return;
+        }
+
+        if (shouldOpenCompanionFromPlanSelector()) {
+            selectEventForMobileCompanion(event);
+            return;
+        }
+
+        window.location.href = getPlanYourDayUrl(event);
     }
 
     function createEventCompanionToggle(event) {
@@ -1347,6 +1392,11 @@
 
         renderCompanionVisibilityButton(button, event);
         button.addEventListener('click', function () {
+            if (state.page === 'plan-selector' && shouldOpenCompanionFromPlanSelector()) {
+                selectEventForMobileCompanion(event);
+                return;
+            }
+
             setEventCompanionVisibility(event, !isEventShownInCompanion(event));
         });
 
@@ -1367,10 +1417,10 @@
         const isSaving = state.savingCompanionEventUrl === event.event_url;
 
         setHidden(button, false);
-        button.textContent = isSaving ? 'Saving...' : (isShown ? 'Attending' : 'Attend');
+        button.textContent = isSaving ? 'Saving...' : (isShown ? 'Un-Attend' : 'Attend');
         button.disabled = isSaving;
         button.setAttribute('aria-pressed', isShown ? 'true' : 'false');
-        button.setAttribute('aria-label', (isShown ? 'Stop attending: ' : 'Attend: ') + getEventTitle(event));
+        button.setAttribute('aria-label', (isShown ? 'Un-Attend: ' : 'Attend: ') + getEventTitle(event));
     }
 
     function renderTabs() {
@@ -1844,7 +1894,7 @@
                     element('a', {
                         className: 'wcc-button',
                         href: getPlanYourDayUrl(null),
-                        text: 'Upcoming WordCamps',
+                        text: 'Attend a WordCamp',
                     }),
                 ],
             })
@@ -1978,22 +2028,17 @@
         const wrapper = element('div', { className: 'wcc-companion-top' });
         const selectedEvent = getSelectedEvent();
         const events = getAttendingEvents();
+        const attendAnotherValue = '__wcc_attend_another__';
         const switcher = element('label', { className: 'wcc-companion-switcher' });
-        const select = element('select', { 'aria-label': 'Switch WordCamp' });
+        const select = element('select', { 'aria-label': 'Switch or attend another WordCamp' });
         const planButton = element('a', {
-            className: 'wcc-plan-link',
+            className: 'wcc-plan-link wcc-companion-link-plan',
             href: getPlanYourDayUrl(selectedEvent),
             text: 'Plan your day',
-        });
-        const addButton = element('a', {
-            className: 'wcc-plan-link',
-            href: getPlanYourDayUrl(null),
-            text: 'Upcoming WordCamps',
         });
 
         if (!events.length) {
             select.append(element('option', { value: '', text: state.loadingEvents ? 'Loading...' : 'No WordCamps yet' }));
-            select.disabled = true;
         } else {
             events.forEach(function (event) {
                 select.append(element('option', {
@@ -2001,18 +2046,25 @@
                     text: event.title || event.location || event.event_url,
                 }));
             });
-            select.value = state.selectedEventUrl || '';
-            select.disabled = state.loadingEvents || state.savingEvent;
         }
+        const actionsGroup = element('optgroup', { label: 'Upcoming WordCamps' });
+        actionsGroup.append(element('option', { value: attendAnotherValue, text: 'Attend another WordCamp' }));
+        select.append(actionsGroup);
+        select.value = state.selectedEventUrl || '';
+        select.disabled = state.loadingEvents || state.savingEvent;
 
         select.addEventListener('change', function () {
+            if (select.value === attendAnotherValue) {
+                window.location.href = getPlanYourDayUrl(null);
+                return;
+            }
+
             selectEvent(select.value);
         });
 
         switcher.append(select);
         wrapper.append(switcher);
         wrapper.append(planButton);
-        wrapper.append(addButton);
 
         return wrapper;
     }
@@ -3743,6 +3795,10 @@
         return Boolean(plan && plan.show_in_companion);
     }
 
+    function shouldOpenCompanionFromPlanSelector() {
+        return Boolean(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
+    }
+
     function getEventByUrl(eventUrl) {
         return getRenderableEvents().find(function (event) {
             return event.event_url === eventUrl;
@@ -3845,6 +3901,10 @@
         }
 
         return base.replace(/\/?$/, '/') + encodeURIComponent(slug) + '/';
+    }
+
+    function getCompanionUrl() {
+        return config.appUrl || '/wordcamp-companion/';
     }
 
     function getNotesUrl() {
