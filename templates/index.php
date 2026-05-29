@@ -20,9 +20,9 @@ defined( 'ABSPATH' ) || exit;
             </div>
             <button id="wcc-debug-play" class="wcc-debug-play" type="button" aria-pressed="false"><?php echo esc_html__( 'Play', 'wordcamp-companion' ); ?></button>
             <label class="wcc-debug-rate">
-                <span><?php echo esc_html__( 'Rate', 'wordcamp-companion' ); ?></span>
-                <input id="wcc-debug-rate" type="range" min="1" max="1200" step="1" value="300">
-                <strong id="wcc-debug-rate-label">300x</strong>
+                <span id="wcc-debug-slider-mode"><?php echo esc_html__( 'Time', 'wordcamp-companion' ); ?></span>
+                <input id="wcc-debug-rate" type="range" min="-180" max="180" step="5" value="0">
+                <strong id="wcc-debug-rate-label">+0m</strong>
             </label>
             <div class="wcc-debug-jumps" aria-label="<?php echo esc_attr__( 'Quick time adjustments', 'wordcamp-companion' ); ?>">
                 <button type="button" data-debug-start="wordcamp"><?php echo esc_html__( 'Start', 'wordcamp-companion' ); ?></button>
@@ -34,6 +34,7 @@ defined( 'ABSPATH' ) || exit;
                 <button type="button" data-debug-jump="1440">+1d</button>
             </div>
             <button id="wcc-debug-reset" class="wcc-button" type="button"><?php echo esc_html__( 'Reset', 'wordcamp-companion' ); ?></button>
+            <button id="wcc-debug-close" class="wcc-debug-close" type="button" aria-label="<?php echo esc_attr__( 'Close debug time and turn off the setting', 'wordcamp-companion' ); ?>">X</button>
         </section>
 
         <div id="wcc-alerts" class="wcc-alerts" aria-live="polite"></div>
