@@ -245,6 +245,7 @@ class RestController {
                 'timezone'   => $schedule['timezone'] ?? '',
                 'days'       => $days,
                 'gaps'       => $gaps,
+                'tracks'     => $schedule['tracks'] ?? [],
                 'mode'       => 'gap-candidates',
                 'fetched_at' => $schedule['fetched_at'] ?? time(),
             ]
