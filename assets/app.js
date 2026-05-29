@@ -1,7 +1,9 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.8';
+    const SCRIPT_BUILD = '20260529.9';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
+    const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
+    const DEBUG_TIME_SLIDER_STEP_MINUTES = 5;
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -32,6 +34,8 @@
         debugOffsetSeconds: 0,
         debugPlaying: false,
         debugRate: 300,
+        debugTimeAdjustmentMinutes: 0,
+        debugTimeAdjustmentBaseOffset: null,
         debugLastTick: null,
         alert: null,
     };
@@ -49,8 +53,10 @@
         nodes.debugCurrent = document.getElementById('wcc-debug-current');
         nodes.debugPlay = document.getElementById('wcc-debug-play');
         nodes.debugRate = document.getElementById('wcc-debug-rate');
+        nodes.debugSliderMode = document.getElementById('wcc-debug-slider-mode');
         nodes.debugRateLabel = document.getElementById('wcc-debug-rate-label');
         nodes.debugReset = document.getElementById('wcc-debug-reset');
+        nodes.debugClose = document.getElementById('wcc-debug-close');
         nodes.debugJumps = Array.from(document.querySelectorAll('[data-debug-jump]'));
         nodes.debugStart = document.querySelector('[data-debug-start]');
         nodes.header = document.querySelector('.wcc-header');
@@ -98,16 +104,30 @@
             nodes.debugReset.addEventListener('click', function () {
                 state.debugOffsetSeconds = 0;
                 state.debugPlaying = false;
+                clearDebugTimeAdjustment();
                 state.debugLastTick = null;
                 render();
                 restartClock();
             });
         }
 
+        if (nodes.debugClose) {
+            nodes.debugClose.addEventListener('click', function () {
+                saveSettings({
+                    show_debug_clock: false,
+                });
+            });
+        }
+
         if (nodes.debugPlay) {
             nodes.debugPlay.addEventListener('click', function () {
+                if (state.debugPlaying) {
+                    updateDebugPlayback();
+                }
+
+                clearDebugTimeAdjustment();
                 state.debugPlaying = !state.debugPlaying;
-                state.debugLastTick = Date.now();
+                state.debugLastTick = state.debugPlaying ? Date.now() : null;
                 render();
                 restartClock();
             });
@@ -115,9 +135,20 @@
 
         if (nodes.debugRate) {
             nodes.debugRate.addEventListener('input', function () {
+                if (!state.debugPlaying) {
+                    adjustDebugTimeFromSlider(Number(nodes.debugRate.value || 0));
+                    return;
+                }
+
                 state.debugRate = Number(nodes.debugRate.value || 1);
                 render();
                 restartClock();
+            });
+
+            nodes.debugRate.addEventListener('change', function () {
+                if (!state.debugPlaying) {
+                    commitDebugTimeAdjustment();
+                }
             });
         }
 
@@ -803,6 +834,7 @@
             if (!isDebugClockEnabled()) {
                 state.debugPlaying = false;
                 state.debugOffsetSeconds = 0;
+                clearDebugTimeAdjustment();
                 state.debugLastTick = null;
             }
 
@@ -912,7 +944,41 @@
         }, timeZone);
         nodes.debugPlay.textContent = state.debugPlaying ? 'Pause' : 'Play';
         nodes.debugPlay.setAttribute('aria-pressed', state.debugPlaying ? 'true' : 'false');
-        nodes.debugRateLabel.textContent = state.debugRate + 'x';
+
+        if (nodes.debugClose) {
+            nodes.debugClose.disabled = state.savingSettings;
+        }
+
+        renderDebugSlider();
+    }
+
+    function renderDebugSlider() {
+        if (!nodes.debugRate || !nodes.debugRateLabel) {
+            return;
+        }
+
+        if (state.debugPlaying) {
+            if (nodes.debugSliderMode) {
+                nodes.debugSliderMode.textContent = 'Rate';
+            }
+            nodes.debugRate.min = '1';
+            nodes.debugRate.max = '1200';
+            nodes.debugRate.step = '1';
+            nodes.debugRate.value = String(state.debugRate);
+            nodes.debugRate.setAttribute('aria-label', 'Playback rate');
+            nodes.debugRateLabel.textContent = state.debugRate + 'x';
+            return;
+        }
+
+        if (nodes.debugSliderMode) {
+            nodes.debugSliderMode.textContent = 'Time';
+        }
+        nodes.debugRate.min = String(-DEBUG_TIME_SLIDER_RANGE_MINUTES);
+        nodes.debugRate.max = String(DEBUG_TIME_SLIDER_RANGE_MINUTES);
+        nodes.debugRate.step = String(DEBUG_TIME_SLIDER_STEP_MINUTES);
+        nodes.debugRate.value = String(state.debugTimeAdjustmentMinutes);
+        nodes.debugRate.setAttribute('aria-label', 'Temporary time adjustment');
+        nodes.debugRateLabel.textContent = formatDebugTimeAdjustment(state.debugTimeAdjustmentMinutes);
     }
 
     function renderLayout() {
@@ -3048,6 +3114,7 @@
             return;
         }
 
+        clearDebugTimeAdjustment();
         state.debugOffsetSeconds += minutes * 60;
         state.debugLastTick = Date.now();
         render();
@@ -3069,9 +3136,65 @@
             return;
         }
 
+        clearDebugTimeAdjustment();
         state.debugOffsetSeconds = Number(start) - 60 * 60 - Math.floor(Date.now() / 1000);
         state.debugLastTick = Date.now();
         render();
+    }
+
+    function adjustDebugTimeFromSlider(minutes) {
+        if (!isDebugClockEnabled() || state.debugPlaying) {
+            return;
+        }
+
+        if (state.debugTimeAdjustmentBaseOffset === null) {
+            state.debugTimeAdjustmentBaseOffset = state.debugOffsetSeconds;
+        }
+
+        state.debugTimeAdjustmentMinutes = minutes;
+        state.debugOffsetSeconds = state.debugTimeAdjustmentBaseOffset + minutes * 60;
+        state.debugLastTick = null;
+        render();
+        restartClock();
+    }
+
+    function commitDebugTimeAdjustment() {
+        if (state.debugPlaying || state.debugTimeAdjustmentBaseOffset === null) {
+            return;
+        }
+
+        state.debugTimeAdjustmentBaseOffset = state.debugOffsetSeconds;
+        state.debugTimeAdjustmentMinutes = 0;
+        render();
+        restartClock();
+    }
+
+    function clearDebugTimeAdjustment() {
+        state.debugTimeAdjustmentMinutes = 0;
+        state.debugTimeAdjustmentBaseOffset = null;
+    }
+
+    function formatDebugTimeAdjustment(minutes) {
+        const value = Number(minutes) || 0;
+
+        if (value === 0) {
+            return '+0m';
+        }
+
+        const sign = value > 0 ? '+' : '-';
+        const absolute = Math.abs(value);
+        const hours = Math.floor(absolute / 60);
+        const remainingMinutes = absolute % 60;
+
+        if (hours && remainingMinutes) {
+            return sign + hours + 'h ' + remainingMinutes + 'm';
+        }
+
+        if (hours) {
+            return sign + hours + 'h';
+        }
+
+        return sign + remainingMinutes + 'm';
     }
 
     function getFirstCompanionStart() {

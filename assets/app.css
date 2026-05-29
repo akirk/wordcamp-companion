@@ -33,6 +33,7 @@ select {
 
 button:focus-visible,
 select:focus-visible,
+input:focus-visible,
 a:focus-visible {
     outline: 3px solid color-mix(in srgb, var(--wcc-focus), transparent 35%);
     outline-offset: 2px;
@@ -146,6 +147,35 @@ a:focus-visible {
 
 .wcc-debug-clock > .wcc-button {
     flex: 0 0 auto;
+}
+
+.wcc-debug-close {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: var(--wcc-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.wcc-debug-close:hover {
+    color: var(--wcc-danger);
+    background: color-mix(in srgb, var(--wcc-danger), transparent 90%);
+    border-color: color-mix(in srgb, var(--wcc-danger), transparent 70%);
+}
+
+.wcc-debug-close:disabled {
+    cursor: wait;
+    opacity: 0.55;
 }
 
 .wcc-debug-jumps button:hover {
@@ -1484,7 +1514,7 @@ a:focus-visible {
     }
 
     .wcc-debug-clock > div:first-child {
-        flex: 1 1 min(240px, calc(100% - 72px));
+        flex: 1 1 min(220px, calc(100% - 112px));
         min-width: 0;
         order: 1;
     }
@@ -1494,6 +1524,10 @@ a:focus-visible {
     }
 
     .wcc-debug-play {
+        order: 1;
+    }
+
+    .wcc-debug-close {
         order: 1;
     }
 
