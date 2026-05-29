@@ -614,6 +614,9 @@
             syncSelectedEventScheduleMetadata(data);
             mergeLoadedGapCandidates(gapKey, Array.isArray(data.gaps) ? data.gaps : []);
             state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
+            if (Array.isArray(data.tracks) && data.tracks.length) {
+                state.schedule.tracks = data.tracks;
+            }
             state.loadedGapKeys[gapKey] = true;
             state.alert = null;
         } catch (error) {
@@ -656,6 +659,9 @@
             state.schedule.gaps_loaded = true;
             state.schedule.timezone = data.timezone || state.schedule.timezone || '';
             state.schedule.site_name = data.site_name || state.schedule.site_name || '';
+            if (Array.isArray(data.tracks) && data.tracks.length) {
+                state.schedule.tracks = data.tracks;
+            }
             state.loadedGapKeys = {};
             state.schedule.gaps.forEach(function (gap) {
                 state.loadedGapKeys[getGapKey(gap)] = true;
@@ -3177,16 +3183,56 @@
 
     function getTracksForSessions(sessions) {
         const tracks = [];
+        const trackPositions = new Map();
 
         sessions.forEach(function (session) {
             const track = getPrimaryTrack(session);
 
             if (track && !shouldSpanTracks(session) && tracks.indexOf(track) === -1) {
+                trackPositions.set(track, tracks.length);
                 tracks.push(track);
             }
         });
 
-        return tracks.length ? tracks : ['Sessions'];
+        if (!tracks.length) {
+            return ['Sessions'];
+        }
+
+        return tracks.sort(function (a, b) {
+            return compareTracks(a, b, trackPositions);
+        });
+    }
+
+    function compareTracks(a, b, fallbackPositions) {
+        const aOrder = getScheduleTrackOrder(a);
+        const bOrder = getScheduleTrackOrder(b);
+
+        if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+        }
+
+        if (fallbackPositions) {
+            return (fallbackPositions.get(a) || 0) - (fallbackPositions.get(b) || 0);
+        }
+
+        return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true });
+    }
+
+    function getScheduleTrackOrder(trackName) {
+        const scheduleTracks = state.schedule && Array.isArray(state.schedule.tracks) ? state.schedule.tracks : [];
+        const normalizedTrackName = normalizeTrackName(trackName);
+
+        for (let index = 0; index < scheduleTracks.length; index++) {
+            if (normalizeTrackName(scheduleTracks[index] && scheduleTracks[index].name) === normalizedTrackName) {
+                return index;
+            }
+        }
+
+        return Number.MAX_SAFE_INTEGER;
+    }
+
+    function normalizeTrackName(trackName) {
+        return String(trackName || '').trim().toLowerCase();
     }
 
     function groupSessionsByTime(sessions) {
@@ -3971,6 +4017,11 @@
 
         if (aStart !== bStart) {
             return aStart - bStart;
+        }
+
+        const trackCompare = compareTracks(getPrimaryTrack(a), getPrimaryTrack(b));
+        if (trackCompare) {
+            return trackCompare;
         }
 
         return String(a.title || '').localeCompare(String(b.title || ''));
