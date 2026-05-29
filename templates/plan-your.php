@@ -13,7 +13,9 @@
         <header class="wcc-header">
             <div>
                 <h1 class="wcc-heading-with-count">
-                    <?php echo esc_html__( 'Upcoming WordCamps', 'wordcamp-companion' ); ?>
+                    <a class="wcc-title-link" href="<?php echo esc_url( home_url( '/wordcamp-companion/' ) ); ?>">
+                        <?php echo esc_html__( 'Upcoming WordCamps', 'wordcamp-companion' ); ?>
+                    </a>
                     <span id="wcc-event-count" class="wcc-count"></span>
                 </h1>
                 <p id="wcc-current-event" class="wcc-current-event" hidden></p>
