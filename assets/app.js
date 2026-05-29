@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.17';
+    const SCRIPT_BUILD = '20260529.18';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -155,7 +155,7 @@
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden && state.view === 'companion') {
                 updateDebugPlayback();
-                render();
+                render({ companionInPlace: true });
                 restartClock();
             }
         });
@@ -990,7 +990,9 @@
             /HTTP\s+(401|403)\b/.test(error.message || '');
     }
 
-    function render() {
+    function render(options) {
+        options = options || {};
+
         try {
             renderLayout();
             renderDebugClock();
@@ -1002,7 +1004,7 @@
             renderSettingsControls();
             renderEvents();
             renderTabs();
-            renderSchedule();
+            renderSchedule(options);
         } catch (error) {
             renderCompanionRenderError(error);
         }
@@ -1431,28 +1433,30 @@
         });
     }
 
-    function renderSchedule() {
+    function renderSchedule(options) {
         if (!nodes.status || !nodes.schedule) {
             return;
         }
 
         try {
-            renderScheduleContent();
+            renderScheduleContent(options || {});
         } catch (error) {
             renderCompanionRenderError(error);
         }
     }
 
-    function renderScheduleContent() {
+    function renderScheduleContent(options) {
+        options = options || {};
         nodes.status.textContent = '';
-        nodes.schedule.replaceChildren();
 
         if (state.page === 'notes') {
+            nodes.schedule.replaceChildren();
             renderNotesPage();
             return;
         }
 
         if (!state.selectedEventUrl) {
+            nodes.schedule.replaceChildren();
             if (state.page === 'companion') {
                 nodes.schedule.append(renderEmptyCompanion());
             } else {
@@ -1464,17 +1468,20 @@
         }
 
         if (state.loadingSchedule) {
+            nodes.schedule.replaceChildren();
             nodes.status.textContent = 'Loading schedule...';
             return;
         }
 
         if (state.page === 'companion' && state.loadingInitialGaps && getSavedSessionIds().size === 0) {
+            nodes.schedule.replaceChildren();
             nodes.status.textContent = 'Loading session choices...';
             nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Loading session choices...' }));
             return;
         }
 
         if (!state.schedule) {
+            nodes.schedule.replaceChildren();
             if (state.page === 'companion') {
                 nodes.schedule.append(renderCompanionFallback(
                     'Companion unavailable',
@@ -1487,9 +1494,20 @@
         }
 
         if (state.view === 'companion') {
-            renderCompanion();
+            const companionModel = getCompanionRenderModel();
+            const previousStepRects = options.companionInPlace ? captureCompanionStepRects() : null;
+
+            if (options.companionInPlace && updateCompanionInPlace(companionModel)) {
+                return;
+            }
+
+            nodes.schedule.replaceChildren();
+            renderCompanion(companionModel);
+            animateCompanionStepPositions(previousStepRects);
             return;
         }
+
+        nodes.schedule.replaceChildren();
 
         if (state.view === 'schedule' && state.schedule.mode !== 'full') {
             nodes.schedule.append(element('div', { className: 'wcc-empty', text: 'Full schedule unavailable.' }));
@@ -1853,10 +1871,12 @@
         return card;
     }
 
-    function renderCompanion() {
-        const timeline = buildCompanionTimeline();
-        const now = getNow();
-        const visibleSteps = getAnimatedCompanionSteps(timeline.steps, now);
+    function renderCompanion(model) {
+        model = model || getCompanionRenderModel();
+        const timeline = model.timeline;
+        const now = model.now;
+        const visibleSteps = model.visibleSteps;
+        const renderableSteps = model.renderableSteps;
 
         if (!visibleSteps.length) {
             nodes.schedule.append(element('div', {
@@ -1866,14 +1886,34 @@
             return;
         }
 
-        const wrapper = element('div', { className: 'wcc-companion' });
+        const wrapper = element('div', {
+            className: 'wcc-companion',
+            dataset: {
+                companionSignature: getCompanionRenderSignature(model),
+                companionStepKeys: getCompanionStepKeySignature(renderableSteps),
+            },
+        });
         wrapper.append(renderCompanionTopLink());
 
-        getRenderableCompanionSteps(visibleSteps).forEach(function (step, index) {
+        renderableSteps.forEach(function (step, index) {
             wrapper.append(renderCompanionStep(step, now, index));
         });
 
         nodes.schedule.append(wrapper);
+    }
+
+    function getCompanionRenderModel() {
+        const timeline = buildCompanionTimeline();
+        const now = getNow();
+        const visibleSteps = getAnimatedCompanionSteps(timeline.steps, now);
+        const renderableSteps = getRenderableCompanionSteps(visibleSteps);
+
+        return {
+            timeline: timeline,
+            now: now,
+            visibleSteps: visibleSteps,
+            renderableSteps: renderableSteps,
+        };
     }
 
     function renderEmptyCompanion() {
@@ -1999,7 +2039,7 @@
 
         companionExitTimer = window.setTimeout(function () {
             companionExitTimer = null;
-            render();
+            render({ companionInPlace: true });
         }, 700);
     }
 
@@ -2013,6 +2053,177 @@
         }
     }
 
+    function updateCompanionInPlace(model) {
+        const wrapper = getCurrentCompanionWrapper();
+
+        if (!wrapper) {
+            return false;
+        }
+
+        const renderableSteps = model.renderableSteps;
+        const stepKeys = getCompanionStepKeys(renderableSteps);
+        const expectedSignature = getCompanionRenderSignature(model);
+
+        if (
+            wrapper.dataset.companionSignature !== expectedSignature ||
+            wrapper.dataset.companionStepKeys !== getCompanionStepKeySignature(renderableSteps)
+        ) {
+            return false;
+        }
+
+        const stepNodes = getCompanionStepNodes(wrapper);
+        const timeZone = getSelectedTimezone();
+
+        if (stepNodes.length !== renderableSteps.length) {
+            return false;
+        }
+
+        for (let index = 0; index < renderableSteps.length; index++) {
+            const step = renderableSteps[index];
+            const timing = getRenderedCompanionTiming(step, model.now, timeZone, index);
+            const timingNode = stepNodes[index].querySelector('.wcc-companion-timing');
+
+            if (
+                stepNodes[index].dataset.companionStepKey !== stepKeys[index] ||
+                Boolean(timingNode) !== Boolean(timing)
+            ) {
+                return false;
+            }
+        }
+
+        renderableSteps.forEach(function (step, index) {
+            updateCompanionStepInPlace(stepNodes[index], step, model.now, index, timeZone);
+        });
+
+        return true;
+    }
+
+    function updateCompanionStepInPlace(item, step, now, index, timeZone) {
+        const timeLabel = formatCompanionStepTime(step, timeZone);
+        const label = getCompanionStepLabel(step, now, index, timeLabel);
+        const labelNode = item.querySelector('.wcc-companion-label');
+        const timingNode = item.querySelector('.wcc-companion-timing');
+        const timing = getRenderedCompanionTiming(step, now, timeZone, index);
+        const className = getCompanionStepClassName(step, now, index);
+
+        if (item.className !== className) {
+            item.className = className;
+        }
+
+        if (labelNode && labelNode.textContent !== label) {
+            labelNode.textContent = label;
+        }
+
+        if (timingNode && timingNode.textContent !== timing) {
+            timingNode.textContent = timing;
+        }
+
+        applyCompanionStepProgress(item, step, now);
+    }
+
+    function captureCompanionStepRects() {
+        const wrapper = getCurrentCompanionWrapper();
+        const rects = {};
+
+        if (!wrapper || shouldReduceMotion()) {
+            return null;
+        }
+
+        getCompanionStepNodes(wrapper).forEach(function (item) {
+            const key = item.dataset.companionStepKey || '';
+
+            if (key) {
+                rects[key] = item.getBoundingClientRect();
+            }
+        });
+
+        return Object.keys(rects).length ? rects : null;
+    }
+
+    function animateCompanionStepPositions(previousRects) {
+        const wrapper = getCurrentCompanionWrapper();
+
+        if (!previousRects || !wrapper || shouldReduceMotion() || typeof window.requestAnimationFrame !== 'function') {
+            return;
+        }
+
+        window.requestAnimationFrame(function () {
+            getCompanionStepNodes(wrapper).forEach(function (item) {
+                if (item.classList.contains('is-exiting')) {
+                    return;
+                }
+
+                const key = item.dataset.companionStepKey || '';
+                const previousRect = previousRects[key];
+
+                if (!previousRect) {
+                    return;
+                }
+
+                const currentRect = item.getBoundingClientRect();
+                const deltaX = previousRect.left - currentRect.left;
+                const deltaY = previousRect.top - currentRect.top;
+
+                if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+                    return;
+                }
+
+                const animationId = String(Date.now()) + Math.random();
+                item.dataset.companionMoveAnimation = animationId;
+                item.style.transition = 'none';
+                item.style.transform = 'translate3d(' + deltaX + 'px, ' + deltaY + 'px, 0)';
+                item.style.willChange = 'transform';
+
+                window.requestAnimationFrame(function () {
+                    item.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)';
+                    item.style.transform = '';
+
+                    window.setTimeout(function () {
+                        if (item.dataset.companionMoveAnimation !== animationId) {
+                            return;
+                        }
+
+                        delete item.dataset.companionMoveAnimation;
+                        item.style.transition = '';
+                        item.style.willChange = '';
+                    }, 340);
+                });
+            });
+        });
+    }
+
+    function getCurrentCompanionWrapper() {
+        const wrapper = nodes.schedule ? nodes.schedule.firstElementChild : null;
+
+        if (!wrapper || !wrapper.classList || !wrapper.classList.contains('wcc-companion')) {
+            return null;
+        }
+
+        return wrapper;
+    }
+
+    function getCompanionStepNodes(wrapper) {
+        if (!wrapper) {
+            return [];
+        }
+
+        return Array.from(wrapper.children).filter(function (child) {
+            return child.classList && child.classList.contains('wcc-companion-step');
+        });
+    }
+
+    function getCompanionStepKeys(steps) {
+        return steps.map(getCompanionStepKey);
+    }
+
+    function getCompanionStepKeySignature(steps) {
+        return JSON.stringify(getCompanionStepKeys(steps));
+    }
+
+    function shouldReduceMotion() {
+        return Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
     function getCompanionStepKey(step) {
         return [
             step.type || '',
@@ -2022,6 +2233,79 @@
             step.end || 0,
             step.title || '',
         ].join(':');
+    }
+
+    function getCompanionRenderSignature(model) {
+        const eventsSignature = getAttendingEvents().map(function (event) {
+            return [
+                event.event_url || '',
+                event.title || '',
+                event.location || '',
+            ];
+        });
+        const loadedGapKeys = Object.keys(state.loadedGapKeys || {}).sort().join(',');
+        const stepSignature = model.renderableSteps.map(getCompanionStepStaticSignature);
+
+        return JSON.stringify([
+            state.selectedEventUrl || '',
+            state.loadingEvents ? '1' : '0',
+            state.savingEvent ? '1' : '0',
+            state.savingCompanionEventUrl || '',
+            state.savingSessionId || '',
+            state.savingNotePostId || '',
+            state.loadingGapKey || '',
+            state.openGapKey || '',
+            loadedGapKeys,
+            eventsSignature,
+            stepSignature,
+        ]);
+    }
+
+    function getCompanionStepStaticSignature(step) {
+        const session = step.session || {};
+        const alternatives = Array.isArray(step.alternatives) ? step.alternatives : [];
+        const candidates = Array.isArray(step.candidates) ? step.candidates : [];
+        const mapLinks = Array.isArray(step.mapLinks) ? step.mapLinks : [];
+
+        return JSON.stringify([
+            getCompanionStepKey(step),
+            step.type || '',
+            step.dayKey || '',
+            step.start || '',
+            step.end || '',
+            step.dayStart || '',
+            step.title || '',
+            step.detail || '',
+            step.meta || '',
+            step.warning || '',
+            step.final ? '1' : '0',
+            getCompanionSessionStaticSignature(session),
+            alternatives.map(getCompanionSessionStaticSignature).join(','),
+            candidates.map(getCompanionSessionStaticSignature).join(','),
+            mapLinks.map(function (link) {
+                return [link.label || '', link.url || ''];
+            }),
+        ]);
+    }
+
+    function getCompanionSessionStaticSignature(session) {
+        if (!session || !session.id) {
+            return '';
+        }
+
+        return JSON.stringify([
+            session.id || '',
+            session.title || '',
+            session.url || '',
+            session.start || '',
+            session.end || '',
+            session.duration || '',
+            session.type || '',
+            Array.isArray(session.speaker_names) ? session.speaker_names.join(',') : '',
+            Array.isArray(session.speaker_urls) ? session.speaker_urls.join(',') : '',
+            Array.isArray(session.track_names) ? session.track_names.join(',') : '',
+            Array.isArray(session.category_names) ? session.category_names.join(',') : '',
+        ]);
     }
 
     function renderCompanionTopLink() {
@@ -2073,15 +2357,10 @@
         const isCurrent = isCompanionStepCurrent(step, now);
         const isGap = step.type === 'gap';
         const item = element('article', {
-            className: [
-                'wcc-companion-step',
-                'is-' + step.type,
-                index === 0 ? 'is-primary' : '',
-                isCurrent ? 'is-current' : '',
-                step.exiting ? 'is-exiting' : '',
-                index === 0 && !isCurrent ? 'is-next' : '',
-                step.final ? 'is-final' : '',
-            ].filter(Boolean).join(' '),
+            className: getCompanionStepClassName(step, now, index),
+            dataset: {
+                companionStepKey: getCompanionStepKey(step),
+            },
         });
         const timeZone = getSelectedTimezone();
         const timeLabel = formatCompanionStepTime(step, timeZone);
@@ -2089,9 +2368,7 @@
         const body = element('div', { className: 'wcc-companion-body' });
         let gapPicker = null;
 
-        if (isCurrent && step.type === 'session') {
-            item.style.setProperty('--wcc-step-progress', getCompanionStepProgress(step, now) + '%');
-        }
+        applyCompanionStepProgress(item, step, now);
 
         if (!isGap) {
             const heading = element('div', { className: 'wcc-companion-heading' });
@@ -2148,8 +2425,8 @@
             body.append(gapPicker);
         }
 
-        const timing = formatCompanionTiming(step, now, timeZone, index);
-        if (timing && !isGap) {
+        const timing = getRenderedCompanionTiming(step, now, timeZone, index);
+        if (timing) {
             body.append(element('div', { className: 'wcc-companion-timing', text: timing }));
         }
 
@@ -2164,6 +2441,41 @@
         item.append(marker, body);
 
         return item;
+    }
+
+    function getCompanionStepClassName(step, now, index) {
+        const isCurrent = isCompanionStepCurrent(step, now);
+
+        return [
+            'wcc-companion-step',
+            'is-' + step.type,
+            index === 0 ? 'is-primary' : '',
+            isCurrent ? 'is-current' : '',
+            step.exiting ? 'is-exiting' : '',
+            index === 0 && !isCurrent ? 'is-next' : '',
+            step.final ? 'is-final' : '',
+        ].filter(Boolean).join(' ');
+    }
+
+    function getRenderedCompanionTiming(step, now, timeZone, index) {
+        if (step.type === 'gap') {
+            return '';
+        }
+
+        return formatCompanionTiming(step, now, timeZone, index);
+    }
+
+    function applyCompanionStepProgress(item, step, now) {
+        if (!isCompanionStepCurrent(step, now) || step.type !== 'session') {
+            item.style.removeProperty('--wcc-step-progress');
+            item.style.removeProperty('--wcc-step-progress-scale');
+            return;
+        }
+
+        const progress = getCompanionStepProgress(step, now);
+
+        item.style.setProperty('--wcc-step-progress', progress + '%');
+        item.style.setProperty('--wcc-step-progress-scale', (progress / 100).toFixed(4));
     }
 
     function renderCompanionMarker(step, gapPicker) {
@@ -3231,7 +3543,7 @@
             if (isEditingNotes()) {
                 renderDebugClock();
             } else {
-                render();
+                render({ companionInPlace: true });
             }
             startClock();
         }, getClockDelay());
