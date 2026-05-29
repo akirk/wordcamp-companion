@@ -11,8 +11,9 @@ class WordCampApi {
     private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v4';
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
+    private const SCHEDULE_CACHE_SCHEMA_VERSION = 2;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
-    private const COMPANION_CACHE_SCHEMA_VERSION = 3;
+    private const COMPANION_CACHE_SCHEMA_VERSION = 4;
     private const MAX_COLLECTION_PAGES = 20;
 
     public function get_wordcamps( bool $force_refresh = false ) {
@@ -88,7 +89,7 @@ class WordCampApi {
             );
         }
 
-        $cache_key = 'wordcamp_companion_schedule_' . md5( $event_url );
+        $cache_key = 'wordcamp_companion_schedule_' . md5( self::SCHEDULE_CACHE_SCHEMA_VERSION . ':' . $event_url );
         if ( ! $force_refresh ) {
             $cached = get_transient( $cache_key );
             if ( false !== $cached ) {
@@ -607,6 +608,7 @@ class WordCampApi {
                 'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
                 'speaker_ids'    => $speaker_ids,
                 'speaker_names'  => $this->names_for_ids( $speaker_ids, $speakers ),
+                'speaker_urls'   => $this->urls_for_ids( $speaker_ids, $speakers ),
                 'track_ids'      => $track_ids,
                 'track_names'    => $this->names_for_ids( $track_ids, $tracks ),
                 'category_ids'   => $category_ids,
@@ -655,6 +657,7 @@ class WordCampApi {
                 'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
                 'speaker_ids'    => $speaker_ids,
                 'speaker_names'  => $this->names_for_ids( $speaker_ids, $speakers ),
+                'speaker_urls'   => $this->urls_for_ids( $speaker_ids, $speakers ),
                 'track_ids'      => $track_ids,
                 'track_names'    => $this->names_for_ids( $track_ids, $tracks ),
                 'category_ids'   => [],
@@ -725,6 +728,18 @@ class WordCampApi {
         }
 
         return $names;
+    }
+
+    private function urls_for_ids( array $ids, array $items ): array {
+        $urls = [];
+
+        foreach ( $ids as $id ) {
+            if ( isset( $items[ $id ]['name'] ) && '' !== $items[ $id ]['name'] ) {
+                $urls[] = isset( $items[ $id ]['url'] ) ? esc_url_raw( $items[ $id ]['url'] ) : '';
+            }
+        }
+
+        return $urls;
     }
 
     private function get_rest_collection( string $endpoint_url ) {

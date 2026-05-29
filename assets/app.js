@@ -485,6 +485,7 @@
             duration: Number(post.duration || 0),
             type: post.type || '',
             speaker_names: Array.isArray(post.speaker_names) ? post.speaker_names : [],
+            speaker_urls: Array.isArray(post.speaker_urls) ? post.speaker_urls : [],
             track_names: Array.isArray(post.track_names) ? post.track_names : [],
             category_names: Array.isArray(post.category_names) ? post.category_names : [],
             notes: post.notes || '',
@@ -1623,8 +1624,9 @@
 
         card.append(title);
 
-        if (session.speaker_names && session.speaker_names.length) {
-            card.append(element('div', { className: 'wcc-session-speakers', text: session.speaker_names.join(', ') }));
+        const speakers = renderSessionSpeakers(session, 'wcc-session-speakers');
+        if (speakers) {
+            card.append(speakers);
         }
 
         if (session.category_names && session.category_names.length) {
@@ -1919,8 +1921,9 @@
             body.append(element('div', { className: 'wcc-companion-meta', text: step.meta }));
         }
 
-        if (step.session && step.session.speaker_names && step.session.speaker_names.length) {
-            body.append(element('div', { className: 'wcc-companion-speakers', text: step.session.speaker_names.join(', ') }));
+        const speakers = step.session ? renderSessionSpeakers(step.session, 'wcc-companion-speakers') : null;
+        if (speakers) {
+            body.append(speakers);
         }
 
         if (step.type === 'choice') {
@@ -1966,15 +1969,48 @@
             );
             item.append(heading);
 
-            if (session.speaker_names && session.speaker_names.length) {
-                meta.push(session.speaker_names.join(', '));
-            }
-
             if (meta.length) {
                 item.append(element('span', { text: meta.join(' / ') }));
             }
 
+            const speakers = renderSessionSpeakers(session, 'wcc-session-speakers wcc-choice-speakers');
+            if (speakers) {
+                item.append(speakers);
+            }
+
             wrapper.append(item);
+        });
+
+        return wrapper;
+    }
+
+    function renderSessionSpeakers(session, className) {
+        const names = Array.isArray(session && session.speaker_names) ? session.speaker_names : [];
+        const urls = Array.isArray(session && session.speaker_urls) ? session.speaker_urls : [];
+
+        if (!names.length) {
+            return null;
+        }
+
+        const wrapper = element('div', { className: className || 'wcc-session-speakers' });
+        names.forEach(function (name, index) {
+            const url = urls[index] || '';
+
+            if (index > 0) {
+                wrapper.append(document.createTextNode(', '));
+            }
+
+            if (url) {
+                wrapper.append(element('a', {
+                    href: url,
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                    text: name,
+                }));
+                return;
+            }
+
+            wrapper.append(document.createTextNode(name));
         });
 
         return wrapper;
@@ -2236,6 +2272,7 @@
             wcc_session_duration: Number(session.duration || 0),
             wcc_session_type: session.type || '',
             wcc_speaker_names: listToMeta(session.speaker_names),
+            wcc_speaker_urls: listToMeta(session.speaker_urls),
             wcc_track_names: listToMeta(session.track_names),
             wcc_category_names: listToMeta(session.category_names),
             wcc_session_snapshot: JSON.stringify(session),
@@ -2265,6 +2302,7 @@
             duration: Number(meta.wcc_session_duration || fallback.duration || 0),
             type: meta.wcc_session_type || fallback.type || '',
             speaker_names: metaToList(meta.wcc_speaker_names, fallback.speaker_names),
+            speaker_urls: metaToUrlList(meta.wcc_speaker_urls, fallback.speaker_urls),
             track_names: metaToList(meta.wcc_track_names, fallback.track_names),
             category_names: metaToList(meta.wcc_category_names, fallback.category_names),
             notes: typeof meta.wcc_session_notes === 'string' ? meta.wcc_session_notes : (fallback.notes || ''),
@@ -2278,6 +2316,14 @@
         }
 
         return value.split(/\r\n|\r|\n/).filter(Boolean);
+    }
+
+    function metaToUrlList(value, fallback) {
+        if (typeof value !== 'string' || !value) {
+            return Array.isArray(fallback) ? fallback : [];
+        }
+
+        return value.split(/\r\n|\r|\n/);
     }
 
     function findLocalSession(sessionId) {
@@ -2800,8 +2846,9 @@
             body.append(element('div', { className: 'wcc-session-meta', text: meta }));
         }
 
-        if (session.speaker_names && session.speaker_names.length) {
-            body.append(element('div', { className: 'wcc-session-speakers', text: session.speaker_names.join(', ') }));
+        const speakers = renderSessionSpeakers(session, 'wcc-session-speakers');
+        if (speakers) {
+            body.append(speakers);
         }
 
         if (notes) {
@@ -2848,8 +2895,9 @@
             body.append(element('div', { className: 'wcc-session-meta', text: meta }));
         }
 
-        if (session.speaker_names && session.speaker_names.length) {
-            body.append(element('div', { className: 'wcc-session-speakers', text: session.speaker_names.join(', ') }));
+        const speakers = renderSessionSpeakers(session, 'wcc-session-speakers');
+        if (speakers) {
+            body.append(speakers);
         }
 
         if (session.description) {

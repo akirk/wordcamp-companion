@@ -248,6 +248,7 @@ class PlannerRepository {
             'wcc_session_url',
             'wcc_session_type',
             'wcc_speaker_names',
+            'wcc_speaker_urls',
             'wcc_track_names',
             'wcc_category_names',
             'wcc_session_snapshot',
@@ -669,6 +670,7 @@ class PlannerRepository {
             'duration'       => absint( get_post_meta( $post_id, 'wcc_session_duration', true ) ),
             'type'           => sanitize_key( (string) get_post_meta( $post_id, 'wcc_session_type', true ) ),
             'speaker_names'  => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_speaker_names', true ) ),
+            'speaker_urls'   => $this->split_meta_url_list( (string) get_post_meta( $post_id, 'wcc_speaker_urls', true ) ),
             'track_names'    => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_track_names', true ) ),
             'category_names' => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_category_names', true ) ),
             'notes'          => sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) ),
@@ -721,6 +723,17 @@ class PlannerRepository {
                     preg_split( '/\r\n|\r|\n/', $value )
                 )
             )
+        );
+    }
+
+    private function split_meta_url_list( string $value ): array {
+        if ( '' === $value ) {
+            return [];
+        }
+
+        return array_map(
+            'esc_url_raw',
+            preg_split( '/\r\n|\r|\n/', $value )
         );
     }
 
