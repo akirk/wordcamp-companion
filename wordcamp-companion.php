@@ -3,9 +3,14 @@
  * Plugin Name: WordCamp Companion
  * Description: Plan your WordCamp attendance and save sessions from event schedules.
  * Version: 1.0.1
- * Author: Alex Kirk
- * Text Domain: wordcamp-companion
+ * Requires at least: 5.0
  * Requires PHP: 7.4
+ * Author: Alex Kirk
+ * Author URI: https://alex.kirk.at/
+ * License: GPL2
+ * License URI: http://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: wordcamp-companion
+ * Domain Path: /languages/
  */
 
 namespace WordCampCompanion;
