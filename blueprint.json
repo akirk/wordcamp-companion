@@ -5,7 +5,8 @@
 		"description": "A tool to help you plan your WordCamp attendance.",
 		"author": "Alex Kirk",
 		"categories": [
-			"Apps"
+			"Apps",
+			"WordPress"
 		]
 	},
 	"landingPage": "/wordcamp-companion/",
