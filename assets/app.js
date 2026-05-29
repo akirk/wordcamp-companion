@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260528.43';
+    const SCRIPT_BUILD = '20260529.1';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -37,7 +37,7 @@
     function init() {
         nodes.app = document.getElementById('wordcamp-companion-app');
         state.page = nodes.app && nodes.app.dataset.page ? nodes.app.dataset.page : 'companion';
-        state.view = state.page === 'plan' ? 'schedule' : 'companion';
+        state.view = state.page === 'plan' ? 'schedule' : (state.page === 'notes' ? 'notes' : 'companion');
         state.pickerOpen = state.page === 'plan' || state.page === 'plan-selector';
         nodes.debugClock = document.getElementById('wcc-debug-clock');
         nodes.debugCurrent = document.getElementById('wcc-debug-current');
@@ -61,6 +61,9 @@
         nodes.picker = document.getElementById('wcc-picker');
         nodes.plannerNav = document.getElementById('wcc-planner-nav');
         nodes.eventSelect = document.getElementById('wcc-event-select');
+        nodes.notesEventSelect = document.getElementById('wcc-notes-event-select');
+        nodes.notesPlanLink = document.getElementById('wcc-notes-plan-link');
+        nodes.planNotesLink = document.getElementById('wcc-plan-notes-link');
         nodes.refreshEvents = document.getElementById('wcc-refresh-events');
         nodes.refreshSchedule = document.getElementById('wcc-refresh-schedule');
         nodes.alerts = document.getElementById('wcc-alerts');
@@ -143,6 +146,12 @@
             });
         }
 
+        if (nodes.notesEventSelect) {
+            nodes.notesEventSelect.addEventListener('change', function (event) {
+                selectNotesEvent(event.target.value);
+            });
+        }
+
         if (nodes.refreshEvents) {
             nodes.refreshEvents.addEventListener('click', function () {
                 loadEvents(true);
@@ -201,7 +210,9 @@
 
         state.loadingEvents = needsEvents;
         state.plan = normalizePlan(config.initialPlan);
-        state.selectedEventUrl = state.page === 'plan-selector' ? '' : (state.plan.selected_event_url || '');
+        state.selectedEventUrl = state.page === 'plan-selector'
+            ? ''
+            : (state.page === 'notes' ? getDefaultNotesEventUrl() : (state.plan.selected_event_url || ''));
         state.pickerOpen = state.page === 'plan-selector' || state.page === 'plan' && !state.selectedEventUrl;
         if (state.page === 'companion' && state.selectedEventUrl) {
             state.schedule = buildLocalCompanionSchedule();
@@ -231,6 +242,11 @@
             }
 
             render();
+
+            if (state.page === 'notes') {
+                render();
+                return;
+            }
 
             if (state.selectedEventUrl && !handledRequestedEvent) {
                 if (state.page === 'companion') {
@@ -306,6 +322,17 @@
             state.savingEvent = false;
             render();
         }
+    }
+
+    function selectNotesEvent(eventUrl) {
+        if (!eventUrl || eventUrl === state.selectedEventUrl) {
+            return;
+        }
+
+        state.selectedEventUrl = eventUrl;
+        state.notesExportCopied = false;
+        state.alert = null;
+        render();
     }
 
     async function setEventCompanionVisibility(event, show) {
@@ -711,6 +738,7 @@
             renderHeader();
             renderSelectedEvent();
             renderControls();
+            renderNotesControls();
             renderEvents();
             renderTabs();
             renderSchedule();
@@ -789,7 +817,7 @@
         const conflictCount = getConflictCount(savedIds);
 
         if (nodes.pageTitle) {
-            nodes.pageTitle.textContent = event ? getEventTitle(event) : 'WordCamp Companion';
+            nodes.pageTitle.textContent = state.page === 'notes' ? 'Session Notes' : (event ? getEventTitle(event) : 'WordCamp Companion');
         }
         if (nodes.pageTitleLink) {
             nodes.pageTitleLink.href = config.appUrl || '/wordcamp-companion/';
@@ -889,6 +917,46 @@
         if (nodes.refreshSchedule) {
             nodes.refreshSchedule.disabled = state.loadingSchedule || !state.selectedEventUrl;
         }
+    }
+
+    function renderNotesControls() {
+        if (!nodes.notesEventSelect && !nodes.notesPlanLink && !nodes.planNotesLink) {
+            return;
+        }
+
+        const event = getSelectedEvent();
+        const notesUrl = getNotesUrl();
+
+        if (nodes.planNotesLink) {
+            nodes.planNotesLink.href = notesUrl;
+        }
+
+        if (nodes.notesPlanLink) {
+            nodes.notesPlanLink.href = getPlanYourDayUrl(event);
+        }
+
+        if (!nodes.notesEventSelect) {
+            return;
+        }
+
+        const events = getNoteEvents();
+        const fragment = document.createDocumentFragment();
+
+        if (!events.length) {
+            fragment.append(element('option', { value: '', text: 'No saved sessions yet' }));
+            nodes.notesEventSelect.disabled = true;
+        } else {
+            events.forEach(function (noteEvent) {
+                fragment.append(element('option', {
+                    value: noteEvent.event_url,
+                    text: noteEvent.title || noteEvent.location || noteEvent.event_url,
+                }));
+            });
+            nodes.notesEventSelect.disabled = false;
+        }
+
+        nodes.notesEventSelect.replaceChildren(fragment);
+        nodes.notesEventSelect.value = state.selectedEventUrl || '';
     }
 
     function renderEvents() {
@@ -1017,6 +1085,11 @@
         nodes.status.textContent = '';
         nodes.schedule.replaceChildren();
 
+        if (state.page === 'notes') {
+            renderNotesPage();
+            return;
+        }
+
         if (!state.selectedEventUrl) {
             if (state.page === 'companion') {
                 nodes.schedule.append(renderEmptyCompanion());
@@ -1076,8 +1149,6 @@
             renderTrackSchedule(sessions, savedIds);
             return;
         }
-
-        nodes.schedule.append(renderNotesExport(sessions));
 
         groupSessionsByDay(sessions, getSelectedTimezone()).forEach(function (group) {
             const section = element('section', { className: 'wcc-day' });
@@ -1143,6 +1214,57 @@
         section.append(header, output);
 
         return section;
+    }
+
+    function renderNotesPage() {
+        const events = getNoteEvents();
+        if (!events.length) {
+            nodes.schedule.append(renderCompanionFallback(
+                'No saved sessions',
+                'Save sessions from a WordCamp before adding notes.'
+            ));
+            return;
+        }
+
+        if (!state.selectedEventUrl || !getSelectedPlan()) {
+            state.selectedEventUrl = events[0].event_url;
+        }
+
+        const selectedPlan = getSelectedPlan();
+        const savedPosts = selectedPlan && Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions : [];
+        const sessions = savedPosts.map(savedSessionPostToSession).filter(function (session) {
+            return session.id && session.start;
+        }).sort(compareSessions);
+
+        if (!sessions.length) {
+            nodes.schedule.append(element('div', {
+                className: 'wcc-empty',
+                text: 'No saved sessions for this WordCamp yet.',
+            }));
+            return;
+        }
+
+        nodes.schedule.append(renderNotesExport(sessions));
+
+        groupSessionsByDay(sessions, getSelectedTimezone()).forEach(function (group) {
+            const section = element('section', { className: 'wcc-day' });
+            const header = element('div', { className: 'wcc-day-header' });
+            header.append(
+                element('h2', { text: group.label }),
+                element('span', {
+                    className: 'wcc-day-count',
+                    text: group.sessions.length + ' session' + (group.sessions.length === 1 ? '' : 's'),
+                })
+            );
+
+            const list = element('div', { className: 'wcc-session-list' });
+            group.sessions.forEach(function (session) {
+                list.append(renderNoteSession(session));
+            });
+
+            section.append(header, list);
+            nodes.schedule.append(section);
+        });
     }
 
     async function copyNotesMarkdown(markdown) {
@@ -1638,13 +1760,6 @@
             body.append(element('div', { className: 'wcc-companion-meta', text: step.session.speaker_names.join(', ') }));
         }
 
-        if (step.type === 'session' && step.session) {
-            const notes = renderSessionNotes(step.session, { compact: true });
-            if (notes) {
-                body.append(notes);
-            }
-        }
-
         if (step.type === 'choice') {
             body.append(renderCompanionChoices(step.alternatives || [], timeZone));
         }
@@ -1694,11 +1809,6 @@
 
             if (meta.length) {
                 item.append(element('span', { text: meta.join(' / ') }));
-            }
-
-            const notes = renderSessionNotes(session, { compact: true });
-            if (notes) {
-                item.append(notes);
             }
 
             wrapper.append(item);
@@ -2488,6 +2598,47 @@
         return details;
     }
 
+    function renderNoteSession(session) {
+        const timeZone = getSelectedTimezone();
+        const article = element('article', { className: 'wcc-session wcc-note-session is-saved' });
+        const time = element('div', { className: 'wcc-session-time', text: formatSessionTime(session, timeZone) });
+        const body = element('div', { className: 'wcc-session-body' });
+        const title = element('h3');
+        const meta = session.track_names && session.track_names.length ? session.track_names.join(', ') : '';
+        const notes = renderSessionNotes(session, { compact: false });
+
+        time.append(element('span', { className: 'wcc-session-duration', text: formatDuration(session.duration) }));
+
+        if (session.url) {
+            title.append(element('a', {
+                href: session.url,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                text: session.title || 'Untitled session',
+            }));
+        } else {
+            title.textContent = session.title || 'Untitled session';
+        }
+
+        body.append(title);
+
+        if (meta) {
+            body.append(element('div', { className: 'wcc-session-meta', text: meta }));
+        }
+
+        if (session.speaker_names && session.speaker_names.length) {
+            body.append(element('div', { className: 'wcc-session-speakers', text: session.speaker_names.join(', ') }));
+        }
+
+        if (notes) {
+            body.append(notes);
+        }
+
+        article.append(time, body);
+
+        return article;
+    }
+
     function renderSession(session, savedIds) {
         const isSaved = savedIds.has(session.id);
         const conflicts = getConflictsForSession(session, savedIds);
@@ -2550,13 +2701,6 @@
                     return conflict.title;
                 }).join(', '),
             }));
-        }
-
-        if (isSaved) {
-            const notes = renderSessionNotes(session, { compact: false });
-            if (notes) {
-                body.append(notes);
-            }
         }
 
         const toggle = element('button', {
@@ -3027,6 +3171,38 @@
         return events.sort(compareEvents);
     }
 
+    function getNoteEvents() {
+        const events = [];
+        const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
+
+        Object.keys(plans).forEach(function (eventUrl) {
+            const plan = plans[eventUrl] && typeof plans[eventUrl] === 'object' ? plans[eventUrl] : null;
+            const event = plan && plan.event ? plan.event : null;
+            const savedSessions = plan && Array.isArray(plan.saved_sessions) ? plan.saved_sessions : [];
+
+            if (savedSessions.length && event && event.event_url && !events.some(function (existing) {
+                return existing.event_url === event.event_url;
+            })) {
+                events.push(event);
+            }
+        });
+
+        return events.sort(compareEvents);
+    }
+
+    function getDefaultNotesEventUrl() {
+        const selectedUrl = state.plan && state.plan.selected_event_url ? state.plan.selected_event_url : '';
+        const events = getNoteEvents();
+
+        if (selectedUrl && events.some(function (event) {
+            return event.event_url === selectedUrl;
+        })) {
+            return selectedUrl;
+        }
+
+        return events.length ? events[0].event_url : '';
+    }
+
     function getPlanForEvent(event) {
         const eventUrl = typeof event === 'string' ? event : event && event.event_url;
         const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
@@ -3142,6 +3318,10 @@
         }
 
         return base.replace(/\/?$/, '/') + encodeURIComponent(slug) + '/';
+    }
+
+    function getNotesUrl() {
+        return config.notesUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/notes/') : '/wordcamp-companion/notes/');
     }
 
     function getSelectedEvent() {

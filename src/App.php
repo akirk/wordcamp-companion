@@ -44,6 +44,7 @@ class App extends BaseApp {
 
     protected function setup_routes(): void {
         $this->app->route( '', 'index.php' );
+        $this->app->route( 'notes', 'notes.php' );
         $this->app->route( 'plan-your', 'plan-your.php' );
         $this->app->route( 'plan-your/{wordcamp}', 'plan.php' );
     }
@@ -58,6 +59,11 @@ class App extends BaseApp {
             'wordcamp-companion-wordcamps',
             'wordcamps',
             home_url( '/' . $this->get_url_path() . '/plan-your/' )
+        );
+        $this->app->add_menu_item(
+            'wordcamp-companion-notes',
+            'notes',
+            home_url( '/' . $this->get_url_path() . '/notes/' )
         );
     }
 
@@ -97,6 +103,7 @@ class App extends BaseApp {
                         'nonce'                   => wp_create_nonce( 'wp_rest' ),
                         'loginUrl'                => wp_login_url( home_url( '/' . $this->get_url_path() . '/' ) ),
                         'appUrl'                  => home_url( '/' . $this->get_url_path() . '/' ),
+                        'notesUrl'                => home_url( '/' . $this->get_url_path() . '/notes/' ),
                         'planBaseUrl'             => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
                         'planUrl'                 => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
                         'routeWordcampSlug'       => sanitize_title( (string) get_query_var( 'wordcamp' ) ),

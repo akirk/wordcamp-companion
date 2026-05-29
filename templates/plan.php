@@ -36,6 +36,7 @@
             </div>
             <div class="wcc-actions">
                 <a class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/' ) ); ?>"><?php echo esc_html__( 'Companion', 'wordcamp-companion' ); ?></a>
+                <a id="wcc-plan-notes-link" class="wcc-button" href="<?php echo esc_url( home_url( '/wordcamp-companion/notes/' ) ); ?>"><?php echo esc_html__( 'Notes', 'wordcamp-companion' ); ?></a>
                 <button id="wcc-refresh-schedule" class="wcc-button" type="button"><?php echo esc_html__( 'Refresh Schedule', 'wordcamp-companion' ); ?></button>
             </div>
         </section>

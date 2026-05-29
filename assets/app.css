@@ -212,6 +212,12 @@ a:focus-visible {
     justify-content: flex-end;
 }
 
+.wcc-notes-header-side {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+}
+
 .wcc-selected-event,
 .wcc-picker,
 .wcc-planner-nav {
@@ -1175,6 +1181,10 @@ a:focus-visible {
     background: color-mix(in srgb, var(--wcc-surface), var(--wcc-surface-alt) 42%);
 }
 
+.wcc-note-session {
+    grid-template-columns: 112px minmax(0, 1fr);
+}
+
 .wcc-session-time {
     min-width: 0;
     font-variant-numeric: tabular-nums;
@@ -1344,6 +1354,10 @@ a:focus-visible {
 
     .wcc-plan-summary {
         text-align: left;
+    }
+
+    .wcc-notes-header-side {
+        justify-items: start;
     }
 
     .wcc-selected-actions {
