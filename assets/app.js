@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.3';
+    const SCRIPT_BUILD = '20260529.4';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
@@ -233,7 +233,7 @@
 
     async function loadInitialData() {
         const requestedSlug = getRequestedWordcampSlug();
-        const needsEvents = state.page === 'plan' || state.page === 'companion' || state.page === 'plan-selector';
+        const needsEvents = state.page === 'plan' || state.page === 'plan-selector';
 
         state.loadingEvents = needsEvents;
         state.plan = normalizePlan(config.initialPlan);
