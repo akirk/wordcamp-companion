@@ -29,7 +29,7 @@ class UserSettings {
         $value = get_user_meta( $user_id, self::DEBUG_CLOCK_META_KEY, true );
 
         if ( '' === $value ) {
-            return true;
+            return false;
         }
 
         return rest_sanitize_boolean( $value );

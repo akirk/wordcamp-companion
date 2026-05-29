@@ -55,6 +55,10 @@ No. The companion page is hydrated from locally stored WordCamp metadata and sav
 
 Yes. Saved sessions are authored by user, and each user has their own selected and attending WordCamps.
 
+### What happens when the plugin is uninstalled?
+
+Uninstalling deletes saved sessions, WordCamp terms and metadata, plugin user settings, and cached WordCamp API responses. Deactivating the plugin does not delete data.
+
 ## External Services
 
 This plugin uses public WordCamp REST APIs to provide event and schedule data:

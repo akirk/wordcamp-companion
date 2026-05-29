@@ -5,7 +5,7 @@
     const state = {
         events: [],
         plan: { selected_event_url: '', plans: {} },
-        settings: { show_debug_clock: true },
+        settings: { show_debug_clock: false },
         schedule: null,
         selectedEventUrl: '',
         page: 'companion',
@@ -4109,7 +4109,7 @@
 
     function normalizeSettings(settings) {
         return {
-            show_debug_clock: !settings || settings.show_debug_clock !== false,
+            show_debug_clock: Boolean(settings && settings.show_debug_clock),
         };
     }
 
