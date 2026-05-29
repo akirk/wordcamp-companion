@@ -1,6 +1,7 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.5';
+    const SCRIPT_BUILD = '20260529.7';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
+    const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const config = window.WordCampCompanionConfig || {};
     const state = {
         events: [],
@@ -2482,6 +2483,7 @@
             }
 
             let currentTrack = '';
+            let occupiedUntil = firstTrackStart;
             getCompanionSessionBlocks(daySessions).forEach(function (block) {
                 if (block.type === 'break') {
                     steps.push({
@@ -2494,19 +2496,24 @@
                         meta: formatSessionTime(block.session, timeZone),
                         session: block.session,
                     });
+                    occupiedUntil = Math.max(occupiedUntil, block.end || block.start || 0);
                     return;
                 }
 
                 if (block.type === 'choice') {
-                    steps.push({
-                        type: 'track',
-                        dayKey: group.key,
-                        start: Math.max(0, block.start - 10 * 60),
-                        end: block.start,
-                        title: 'Choose where to go',
-                        detail: getChoiceTrackSummary(block.sessions),
-                        meta: '',
-                    });
+                    const choiceWindow = getTrackChangeWindow(block.start, occupiedUntil);
+
+                    if (choiceWindow) {
+                        steps.push({
+                            type: 'track',
+                            dayKey: group.key,
+                            start: choiceWindow.start,
+                            end: choiceWindow.end,
+                            title: 'Choose where to go',
+                            detail: getChoiceTrackSummary(block.sessions),
+                            meta: '',
+                        });
+                    }
                     steps.push({
                         type: 'choice',
                         dayKey: group.key,
@@ -2518,6 +2525,7 @@
                         alternatives: block.sessions,
                     });
                     currentTrack = '';
+                    occupiedUntil = Math.max(occupiedUntil, block.end || block.start || 0);
                     return;
                 }
 
@@ -2527,31 +2535,37 @@
                 let warningShownOnTrack = false;
 
                 if (track && track !== currentTrack) {
-                    steps.push({
-                        type: 'track',
-                        dayKey: group.key,
-                        start: Math.max(0, session.start - 10 * 60),
-                        end: session.start,
-                        title: currentTrack ? 'Switch to ' + track : 'Go to ' + track,
-                        detail: '',
-                        meta: '',
-                        warning: overlapWarning,
-                    });
-                    warningShownOnTrack = Boolean(overlapWarning);
+                    const trackWindow = getTrackChangeWindow(session.start, occupiedUntil);
+
+                    if (trackWindow) {
+                        steps.push({
+                            type: 'track',
+                            dayKey: group.key,
+                            start: trackWindow.start,
+                            end: trackWindow.end,
+                            title: currentTrack ? 'Switch to ' + track : 'Go to ' + track,
+                            detail: '',
+                            meta: '',
+                            warning: overlapWarning,
+                        });
+                        warningShownOnTrack = Boolean(overlapWarning);
+                    }
                     currentTrack = track;
                 }
 
+                const sessionEnd = session.end || session.start + Math.max(0, Number(session.duration || 0));
                 steps.push({
                     type: 'session',
                     dayKey: group.key,
                     start: session.start,
-                    end: session.end || session.start + Math.max(0, Number(session.duration || 0)),
+                    end: sessionEnd,
                     title: session.title || 'Untitled session',
                     detail: getPrimaryTrack(session),
                     meta: formatSessionTime(session, timeZone),
                     session: session,
                     warning: warningShownOnTrack ? '' : overlapWarning,
                 });
+                occupiedUntil = Math.max(occupiedUntil, sessionEnd || session.start || 0);
             });
 
             const gaps = getCompanionGapsForDay(daySessions, savedIds, group.key);
@@ -2677,6 +2691,20 @@
         }
 
         return 'Pick one: ' + tracks.join(' / ');
+    }
+
+    function getTrackChangeWindow(targetStart, occupiedUntil) {
+        const end = Number(targetStart || 0);
+        const blockedUntil = Number(occupiedUntil || 0);
+
+        if (!end || blockedUntil > end) {
+            return null;
+        }
+
+        return {
+            start: Math.max(0, end - TRACK_CHANGE_LEAD_SECONDS, blockedUntil),
+            end: end,
+        };
     }
 
     function getSessionOverlapWarning(session, sessions, timeZone) {
@@ -3036,8 +3064,8 @@
     function formatScheduledStepTiming(step) {
         const duration = step.start && step.end ? step.end - step.start : 0;
 
-        if (step.type === 'track' && duration) {
-            return formatRelativeDuration(duration) + ' before session';
+        if (step.type === 'track') {
+            return duration ? formatRelativeDuration(duration) + ' before session' : 'At session start';
         }
 
         if (step.type === 'break' && duration) {
