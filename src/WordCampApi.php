@@ -12,7 +12,7 @@ class WordCampApi {
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
-    private const COMPANION_CACHE_SCHEMA_VERSION = 2;
+    private const COMPANION_CACHE_SCHEMA_VERSION = 3;
     private const MAX_COLLECTION_PAGES = 20;
 
     public function get_wordcamps( bool $force_refresh = false ) {
@@ -226,13 +226,16 @@ class WordCampApi {
 
         $tracks = $this->get_companion_tracks( $context );
         $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
+        $speakers = $this->get_companion_speakers( $context );
+        $normalized_speakers = is_wp_error( $speakers ) ? [] : $this->normalize_speakers( $speakers );
 
         $payload = [
             'event_url'  => $context['event_url'],
             'site_name'  => $context['site_name'],
             'timezone'   => $context['timezone'],
-            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_tracks ),
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks ),
             'days'       => $days,
+            'speakers'   => array_values( $normalized_speakers ),
             'tracks'     => array_values( $normalized_tracks ),
             'fetched_at' => time(),
         ];
@@ -253,7 +256,7 @@ class WordCampApi {
             );
         }
 
-        $cache_key = 'wordcamp_companion_schedule_candidates_' . md5( $event_url );
+        $cache_key = 'wordcamp_companion_schedule_candidates_' . md5( self::COMPANION_CACHE_SCHEMA_VERSION . ':' . $event_url );
         if ( ! $force_refresh ) {
             $cached = get_transient( $cache_key );
             if ( false !== $cached ) {
@@ -273,12 +276,15 @@ class WordCampApi {
 
         $tracks = $this->get_companion_tracks( $context );
         $normalized_tracks = is_wp_error( $tracks ) ? [] : $this->normalize_terms( $tracks );
+        $speakers = $this->get_companion_speakers( $context );
+        $normalized_speakers = is_wp_error( $speakers ) ? [] : $this->normalize_speakers( $speakers );
 
         $payload = [
             'event_url'  => $context['event_url'],
             'site_name'  => $context['site_name'],
             'timezone'   => $context['timezone'],
-            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_tracks ),
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks ),
+            'speakers'   => array_values( $normalized_speakers ),
             'tracks'     => array_values( $normalized_tracks ),
             'fetched_at' => time(),
         ];
@@ -426,6 +432,21 @@ class WordCampApi {
                     '_fields' => 'id,name,slug',
                 ],
                 trailingslashit( $context['event_url'] ) . 'wp-json/wp/v2/session_track'
+            )
+        );
+    }
+
+    private function get_companion_speakers( array $context ) {
+        if ( ! $this->rest_route_exists( $context['index'], '/wp/v2/speakers' ) ) {
+            return [];
+        }
+
+        return $this->get_rest_collection(
+            add_query_arg(
+                [
+                    '_fields' => 'id,title,link',
+                ],
+                trailingslashit( $context['event_url'] ) . 'wp-json/wp/v2/speakers'
             )
         );
     }
@@ -608,7 +629,7 @@ class WordCampApi {
         return array_values( $normalized );
     }
 
-    private function normalize_companion_sessions( array $sessions, array $tracks ): array {
+    private function normalize_companion_sessions( array $sessions, array $speakers, array $tracks ): array {
         $normalized = [];
 
         foreach ( $sessions as $session ) {
@@ -617,6 +638,7 @@ class WordCampApi {
             }
 
             $meta = isset( $session['meta'] ) && is_array( $session['meta'] ) ? $session['meta'] : [];
+            $speaker_ids = $this->normalize_id_list( $meta['_wcpt_speaker_id'] ?? [] );
             $track_ids = $this->normalize_id_list( $session['session_track'] ?? [] );
             $start = $this->normalize_timestamp( $meta['_wcpt_session_time'] ?? null );
             $duration = isset( $meta['_wcpt_session_duration'] ) ? absint( $meta['_wcpt_session_duration'] ) : 0;
@@ -631,8 +653,8 @@ class WordCampApi {
                 'duration'       => $duration,
                 'end'            => $start && $duration ? $start + $duration : null,
                 'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
-                'speaker_ids'    => [],
-                'speaker_names'  => [],
+                'speaker_ids'    => $speaker_ids,
+                'speaker_names'  => $this->names_for_ids( $speaker_ids, $speakers ),
                 'track_ids'      => $track_ids,
                 'track_names'    => $this->names_for_ids( $track_ids, $tracks ),
                 'category_ids'   => [],
