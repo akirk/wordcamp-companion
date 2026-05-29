@@ -329,6 +329,7 @@ class RestController {
     private function saved_session_post_to_session( array $session_post ): array {
         return [
             'id'             => isset( $session_post['session_id'] ) ? absint( $session_post['session_id'] ) : 0,
+            'post_id'        => isset( $session_post['post_id'] ) ? absint( $session_post['post_id'] ) : 0,
             'title'          => isset( $session_post['title'] ) ? sanitize_text_field( (string) $session_post['title'] ) : '',
             'url'            => isset( $session_post['url'] ) ? esc_url_raw( (string) $session_post['url'] ) : '',
             'start'          => isset( $session_post['start'] ) ? absint( $session_post['start'] ) : null,
@@ -339,6 +340,7 @@ class RestController {
             'speaker_urls'   => isset( $session_post['speaker_urls'] ) && is_array( $session_post['speaker_urls'] ) ? array_map( 'esc_url_raw', $session_post['speaker_urls'] ) : [],
             'track_names'    => isset( $session_post['track_names'] ) && is_array( $session_post['track_names'] ) ? array_map( 'sanitize_text_field', $session_post['track_names'] ) : [],
             'category_names' => isset( $session_post['category_names'] ) && is_array( $session_post['category_names'] ) ? array_map( 'sanitize_text_field', $session_post['category_names'] ) : [],
+            'notes'          => isset( $session_post['notes'] ) ? sanitize_textarea_field( (string) $session_post['notes'] ) : '',
         ];
     }
 
