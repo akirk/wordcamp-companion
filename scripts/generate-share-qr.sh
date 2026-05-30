@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QR_TARGET_URL="https://my.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2Fakirk%2Fwordcamp-companion%2Frefs%2Fheads%2Fmain%2Fblueprint-mywp.json"
+DEFAULT_QR_TARGET_URL="https://my.wordpress.net/?i=wordcamp-companion"
+QR_TARGET_URL="${1:-${QR_TARGET_URL:-${DEFAULT_QR_TARGET_URL}}}"
 QR_OUTPUT="${ROOT_DIR}/assets/share-qr.png"
 
 if ! command -v qrencode >/dev/null 2>&1; then

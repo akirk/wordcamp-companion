@@ -90,6 +90,18 @@ class App extends BaseApp {
             return;
         }
 
+        $wcc_share = $this->get_wcc_query_parameter();
+        if ( '' !== $wcc_share ) {
+            wp_safe_redirect(
+                add_query_arg(
+                    'wcc1',
+                    $wcc_share,
+                    home_url( '/' . $this->get_url_path() . '/plan-your/schedule/' )
+                )
+            );
+            exit;
+        }
+
         $plan = $this->repository->get_plan( get_current_user_id() );
         if ( ! empty( $plan['selected_event_url'] ) ) {
             return;
@@ -97,6 +109,19 @@ class App extends BaseApp {
 
         wp_safe_redirect( home_url( '/' . $this->get_url_path() . '/plan-your/' ) );
         exit;
+    }
+
+    private function get_wcc_query_parameter(): string {
+        $query_string = isset( $_SERVER['QUERY_STRING'] ) ? (string) wp_unslash( $_SERVER['QUERY_STRING'] ) : '';
+        if ( '' !== $query_string && preg_match( '/(?:^|&)wcc1=([^&]+)/', $query_string, $matches ) ) {
+            return sanitize_text_field( rawurldecode( $matches[1] ) );
+        }
+
+        if ( isset( $_GET['wcc1'] ) && is_scalar( $_GET['wcc1'] ) ) {
+            return sanitize_text_field( wp_unslash( (string) $_GET['wcc1'] ) );
+        }
+
+        return '';
     }
 
     private function enqueue_assets(): void {
@@ -159,8 +184,7 @@ class App extends BaseApp {
             'notesUrl'                 => home_url( '/' . $this->get_url_path() . '/notes/' ),
             'planBaseUrl'              => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
             'planUrl'                  => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
-            'shareUrl'                 => 'https://my.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2Fakirk%2Fwordcamp-companion%2Frefs%2Fheads%2Fmain%2Fblueprint-mywp.json',
-            'shareQrImageUrl'          => plugins_url( 'assets/share-qr.png', dirname( __DIR__ ) . '/wordcamp-companion.php' ),
+            'shareUrl'                 => 'https://my.wordpress.net/?i=wordcamp-companion',
             'routeWordcampSlug'        => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
             'assetVersion'             => $asset_version,
             'timeFormat'               => get_option( 'time_format' ),
