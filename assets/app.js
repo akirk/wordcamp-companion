@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260530.3';
+    const SCRIPT_BUILD = '20260530.4';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -1563,7 +1563,7 @@
             return a - b;
         });
 
-        return eventToken + (sessionIds.length ? ';' + sessionIds.join(',') : '');
+        return eventToken + (sessionIds.length ? '_' + sessionIds.join('.') : '');
     }
 
     function getWccEventToken(eventUrl) {
@@ -1575,7 +1575,7 @@
             const year = (url.pathname.match(/\/(\d{4})(?:\/|$)/) || [])[1] || '';
 
             if (subdomain && year) {
-                return subdomain + ',' + year;
+                return subdomain + '.' + year;
             }
 
             return normalizeWccEventUrl(eventUrl);
@@ -1604,7 +1604,7 @@
             return;
         }
 
-        nodes.importScheduleDialog.dataset.wccSessionIds = requestedWcc.sessionIds.join(',');
+        nodes.importScheduleDialog.dataset.wccSessionIds = requestedWcc.sessionIds.join('.');
         updateImportScheduleDialog();
         nodes.importScheduleDialog.hidden = false;
         document.body.classList.add('has-wcc-modal');
@@ -5075,9 +5075,11 @@
             return null;
         }
 
-        const parts = value.split(';');
+        const legacyParts = value.split(';');
+        const isLegacyFormat = legacyParts.length > 1 || /^[^_]+,\d{4}(?:_|$)/.test(value);
+        const parts = isLegacyFormat ? legacyParts : value.split('_');
         const eventPart = (parts.shift() || '').trim();
-        const sessionPart = parts.join(';');
+        const sessionPart = parts.join(isLegacyFormat ? ';' : '_');
         let eventUrl = '';
         let eventSlug = '';
         let eventYear = '';
@@ -5085,7 +5087,9 @@
         if (/^https?:\/\//i.test(eventPart)) {
             eventUrl = normalizeWccEventUrl(eventPart);
         } else {
-            const eventParts = eventPart.split(',');
+            const eventParts = isLegacyFormat
+                ? eventPart.split(',')
+                : (eventPart.match(/^(.+)\.(\d{4})$/) || []).slice(1);
             eventSlug = eventParts.length === 2 ? normalizeWccEventSlug(eventParts[0]) : '';
             eventYear = eventParts.length === 2 ? String(eventParts[1] || '').trim() : '';
 
@@ -5138,7 +5142,7 @@
     }
 
     function parseWccSessionIds(value) {
-        return String(value || '').split(',').map(function (id) {
+        return String(value || '').split(/[,.]/).map(function (id) {
             return Number(id.trim());
         }).filter(function (id, index, ids) {
             return Number.isInteger(id) && id > 0 && ids.indexOf(id) === index;
