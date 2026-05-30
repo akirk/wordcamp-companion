@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260529.18';
+    const SCRIPT_BUILD = '20260530.2';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -203,6 +203,12 @@
                 loadSchedule(true, state.view === 'schedule' ? 'full' : 'companion');
             });
         }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeShareDialog();
+            }
+        });
 
         if (nodes.changeEvent && nodes.changeEvent.tagName.toLowerCase() === 'button') {
             nodes.changeEvent.addEventListener('click', function () {
@@ -1305,6 +1311,91 @@
         }
     }
 
+    function openShareDialog() {
+        ensureShareDialog();
+
+        if (!nodes.shareDialog) {
+            return;
+        }
+
+        nodes.shareDialog.hidden = false;
+        document.body.classList.add('has-wcc-modal');
+
+        const closeButton = nodes.shareDialog.querySelector('.wcc-share-close');
+        if (closeButton) {
+            closeButton.focus();
+        }
+    }
+
+    function closeShareDialog() {
+        if (!nodes.shareDialog || nodes.shareDialog.hidden) {
+            return;
+        }
+
+        nodes.shareDialog.hidden = true;
+        document.body.classList.remove('has-wcc-modal');
+    }
+
+    function ensureShareDialog() {
+        if (nodes.shareDialog) {
+            return;
+        }
+
+        const shareUrl = config.shareUrl || '';
+        const qrImageUrl = config.shareQrImageUrl || '';
+
+        if (!shareUrl || !qrImageUrl) {
+            return;
+        }
+
+        const closeButton = element('button', {
+            className: 'wcc-share-close',
+            type: 'button',
+            'aria-label': 'Close share dialog',
+            text: 'X',
+        });
+        closeButton.addEventListener('click', closeShareDialog);
+
+        const panel = element('div', {
+            className: 'wcc-share-panel',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-labelledby': 'wcc-share-title',
+        });
+        panel.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+
+        panel.append(
+            closeButton,
+            element('h2', { id: 'wcc-share-title', text: 'Share WordCamp Companion' }),
+            element('img', {
+                className: 'wcc-share-qr',
+                src: qrImageUrl,
+                alt: 'QR code for WordCamp Companion',
+                width: '360',
+                height: '360',
+                loading: 'lazy',
+                decoding: 'async',
+            }),
+            element('a', {
+                className: 'wcc-button',
+                href: shareUrl,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                text: 'Open link',
+            })
+        );
+
+        nodes.shareDialog = element('div', {
+            className: 'wcc-share-dialog',
+            hidden: 'hidden',
+        });
+        nodes.shareDialog.addEventListener('click', closeShareDialog);
+        nodes.shareDialog.append(panel);
+        document.body.append(nodes.shareDialog);
+    }
+
     function renderEvents() {
         if (!nodes.eventList || !nodes.eventCount) {
             return;
@@ -2313,8 +2404,10 @@
         const selectedEvent = getSelectedEvent();
         const events = getAttendingEvents();
         const attendAnotherValue = '__wcc_attend_another__';
+        const switcherRow = element('div', { className: 'wcc-companion-switcher-row' });
         const switcher = element('label', { className: 'wcc-companion-switcher' });
         const select = element('select', { 'aria-label': 'Switch or attend another WordCamp' });
+        const shareButton = createShareIconButton();
         const planButton = element('a', {
             className: 'wcc-plan-link wcc-companion-link-plan',
             href: getPlanYourDayUrl(selectedEvent),
@@ -2347,7 +2440,8 @@
         });
 
         switcher.append(select);
-        wrapper.append(switcher);
+        switcherRow.append(switcher, shareButton);
+        wrapper.append(switcherRow);
         wrapper.append(planButton);
 
         return wrapper;
@@ -4906,6 +5000,24 @@
         });
 
         return node;
+    }
+
+    function createShareIconButton() {
+        const button = element('button', {
+            className: 'wcc-share-icon-button',
+            type: 'button',
+            'aria-label': 'Share WordCamp Companion',
+            title: 'Share',
+        });
+        const icon = element('span', {
+            className: 'dashicons dashicons-share',
+            'aria-hidden': 'true',
+        });
+
+        button.append(icon);
+        button.addEventListener('click', openShareDialog);
+
+        return button;
     }
 
     if (document.readyState === 'loading') {

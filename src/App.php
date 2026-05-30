@@ -106,6 +106,13 @@ class App extends BaseApp {
         $version = defined( 'WORDCAMP_COMPANION_VERSION' ) ? WORDCAMP_COMPANION_VERSION : '1.0.0';
         $asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : $version;
 
+        wp_app_enqueue_style(
+            'dashicons',
+            includes_url( 'css/dashicons.min.css' ),
+            [],
+            get_bloginfo( 'version' )
+        );
+
         if ( file_exists( $css_path ) ) {
             wp_app_enqueue_style(
                 'wordcamp-companion',
@@ -152,6 +159,8 @@ class App extends BaseApp {
             'notesUrl'                 => home_url( '/' . $this->get_url_path() . '/notes/' ),
             'planBaseUrl'              => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
             'planUrl'                  => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
+            'shareUrl'                 => 'https://my.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2Fakirk%2Fwordcamp-companion%2Frefs%2Fheads%2Fmain%2Fblueprint-mywp.json',
+            'shareQrImageUrl'          => plugins_url( 'assets/share-qr.png', dirname( __DIR__ ) . '/wordcamp-companion.php' ),
             'routeWordcampSlug'        => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
             'assetVersion'             => $asset_version,
             'timeFormat'               => get_option( 'time_format' ),
