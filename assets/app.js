@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260530.2';
+    const SCRIPT_BUILD = '20260530.4';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -38,6 +38,9 @@
         debugTimeAdjustmentBaseOffset: null,
         debugLastTick: null,
         alert: null,
+        shareMode: '',
+        shareModeTouched: false,
+        importingSharedSchedule: false,
     };
 
     const nodes = {};
@@ -207,6 +210,7 @@
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 closeShareDialog();
+                closeImportScheduleDialog();
             }
         });
 
@@ -271,8 +275,16 @@
     }
 
     async function loadInitialData() {
-        const requestedSlug = getRequestedWordcampSlug();
-        const needsEvents = state.page === 'plan' || state.page === 'plan-selector';
+        const requestedWccRaw = getRequestedWccValue();
+        const requestedWcc = parseWccParameter(requestedWccRaw);
+
+        if (requestedWccRaw && state.page !== 'plan') {
+            window.location.replace(getWccPlanUrl(requestedWccRaw));
+            return;
+        }
+
+        const requestedSlug = requestedWccRaw ? '' : getRequestedWordcampSlug();
+        const needsEvents = !requestedWccRaw && (state.page === 'plan' || state.page === 'plan-selector');
 
         state.loadingEvents = needsEvents;
         state.plan = normalizePlan(config.initialPlan);
@@ -302,7 +314,13 @@
 
             state.alert = null;
 
-            if (requestedSlug) {
+            if (requestedWccRaw && !requestedWcc) {
+                handledRequestedEvent = true;
+                state.alert = { type: 'error', message: 'WordCamp schedule link is invalid.' };
+            } else if (requestedWcc) {
+                handledRequestedEvent = true;
+                await selectWccSchedule(requestedWcc);
+            } else if (requestedSlug) {
                 const requestedEvent = getEventBySlug(requestedSlug);
                 if (requestedEvent) {
                     handledRequestedEvent = requestedEvent.event_url !== state.selectedEventUrl;
@@ -397,6 +415,48 @@
                 }
             } else {
                 await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
+            }
+        } catch (error) {
+            state.selectedEventUrl = previousSelectedEventUrl;
+            state.schedule = previousSchedule;
+            state.loadedGapKeys = previousLoadedGapKeys;
+            state.openGapKey = previousOpenGapKey;
+            resetCompanionAnimationState();
+            state.alert = getErrorAlert(error);
+        } finally {
+            state.savingEvent = false;
+            state.savingCompanionEventUrl = '';
+            render();
+        }
+    }
+
+    async function selectWccSchedule(requestedWcc) {
+        const event = buildWccEvent(requestedWcc);
+        const previousSelectedEventUrl = state.selectedEventUrl;
+        const previousSchedule = state.schedule;
+        const previousLoadedGapKeys = Object.assign({}, state.loadedGapKeys);
+        const previousOpenGapKey = state.openGapKey;
+
+        state.selectedEventUrl = event.event_url;
+        state.view = 'schedule';
+        state.pickerOpen = false;
+        state.schedule = null;
+        state.loadedGapKeys = {};
+        resetCompanionAnimationState();
+        state.savingEvent = true;
+        state.savingCompanionEventUrl = event.event_url;
+        state.alert = null;
+        render();
+
+        try {
+            state.plan = normalizePlan(await api('plan/event', {
+                method: 'POST',
+                body: { event: event },
+            }));
+            state.selectedEventUrl = event.event_url;
+            await loadSchedule(false, 'full');
+            if (requestedWcc.sessionIds.length) {
+                openImportScheduleDialog(requestedWcc);
             }
         } catch (error) {
             state.selectedEventUrl = previousSelectedEventUrl;
@@ -1318,6 +1378,7 @@
             return;
         }
 
+        updateShareDialog();
         nodes.shareDialog.hidden = false;
         document.body.classList.add('has-wcc-modal');
 
@@ -1342,9 +1403,7 @@
         }
 
         const shareUrl = config.shareUrl || '';
-        const qrImageUrl = config.shareQrImageUrl || '';
-
-        if (!shareUrl || !qrImageUrl) {
+        if (!shareUrl) {
             return;
         }
 
@@ -1366,25 +1425,36 @@
             event.stopPropagation();
         });
 
+        nodes.shareQr = element('div', {
+            className: 'wcc-share-qr',
+            role: 'img',
+            'aria-label': 'QR code for WordCamp Companion',
+        });
+        nodes.shareOptionApp = createShareOption('app', 'App only');
+        nodes.shareOptionSchedule = createShareOption('schedule', 'With schedule');
+        nodes.shareLink = element('a', {
+            className: 'wcc-button wcc-share-link',
+            href: shareUrl,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            text: 'Open link',
+        });
+
+        const options = element('fieldset', {
+            className: 'wcc-share-options',
+            'aria-label': 'Share options',
+        });
+        options.append(
+            nodes.shareOptionApp.label,
+            nodes.shareOptionSchedule.label
+        );
+
         panel.append(
             closeButton,
             element('h2', { id: 'wcc-share-title', text: 'Share WordCamp Companion' }),
-            element('img', {
-                className: 'wcc-share-qr',
-                src: qrImageUrl,
-                alt: 'QR code for WordCamp Companion',
-                width: '360',
-                height: '360',
-                loading: 'lazy',
-                decoding: 'async',
-            }),
-            element('a', {
-                className: 'wcc-button',
-                href: shareUrl,
-                target: '_blank',
-                rel: 'noopener noreferrer',
-                text: 'my.wordpress.net',
-            })
+            nodes.shareQr,
+            options,
+            nodes.shareLink
         );
 
         nodes.shareDialog = element('div', {
@@ -1395,6 +1465,745 @@
         nodes.shareDialog.append(panel);
         document.body.append(nodes.shareDialog);
     }
+
+    function createShareOption(value, labelText) {
+        const id = 'wcc-share-option-' + value;
+        const input = element('input', {
+            id: id,
+            type: 'radio',
+            name: 'wcc-share-mode',
+            value: value,
+        });
+        const text = element('span', { text: labelText });
+        const label = element('label', { className: 'wcc-share-option', for: id });
+
+        input.addEventListener('change', function () {
+            if (!input.checked) {
+                return;
+            }
+
+            state.shareMode = value;
+            state.shareModeTouched = true;
+            updateShareDialog();
+        });
+        label.append(input, text);
+
+        return {
+            input: input,
+            label: label,
+        };
+    }
+
+    function updateShareDialog() {
+        if (!nodes.shareQr || !nodes.shareLink) {
+            return;
+        }
+
+        const canShareSchedule = Boolean(getSelectedEvent());
+        const mode = getActiveShareMode(canShareSchedule);
+        const shareUrl = getShareUrlForMode(mode);
+
+        nodes.shareOptionApp.input.checked = mode === 'app';
+        nodes.shareOptionSchedule.input.checked = mode === 'schedule';
+        nodes.shareOptionApp.label.classList.toggle('is-checked', mode === 'app');
+        nodes.shareOptionSchedule.label.classList.toggle('is-checked', mode === 'schedule');
+        nodes.shareOptionSchedule.input.disabled = !canShareSchedule;
+        nodes.shareOptionSchedule.label.classList.toggle('is-disabled', !canShareSchedule);
+        nodes.shareLink.href = shareUrl;
+
+        renderShareQr(shareUrl);
+    }
+
+    function getActiveShareMode(canShareSchedule) {
+        if (!canShareSchedule) {
+            return 'app';
+        }
+
+        if (!state.shareModeTouched || !state.shareMode) {
+            return 'schedule';
+        }
+
+        return state.shareMode === 'schedule' ? 'schedule' : 'app';
+    }
+
+    function getShareUrlForMode(mode) {
+        const shareUrl = config.shareUrl || 'https://my.wordpress.net/?i=wordcamp-companion';
+
+        if (mode !== 'schedule') {
+            return shareUrl;
+        }
+
+        const payload = getCurrentWccSharePayload();
+        if (!payload) {
+            return shareUrl;
+        }
+
+        try {
+            const url = new URL(shareUrl, window.location.href);
+            url.searchParams.set('wcc1', payload);
+            return url.toString();
+        } catch (error) {
+            const separator = shareUrl.indexOf('?') === -1 ? '?' : '&';
+            return shareUrl + separator + 'wcc1=' + encodeURIComponent(payload);
+        }
+    }
+
+    function getCurrentWccSharePayload() {
+        const event = getSelectedEvent();
+        if (!event || !event.event_url) {
+            return '';
+        }
+
+        const eventToken = getWccEventToken(event.event_url);
+        if (!eventToken) {
+            return '';
+        }
+
+        const sessionIds = Array.from(getSavedSessionIds()).sort(function (a, b) {
+            return a - b;
+        });
+
+        return eventToken + (sessionIds.length ? '_' + sessionIds.join('.') : '');
+    }
+
+    function getWccEventToken(eventUrl) {
+        try {
+            const url = new URL(eventUrl, window.location.href);
+            const hostParts = url.hostname.toLowerCase().split('.');
+            const wordcampIndex = hostParts.indexOf('wordcamp');
+            const subdomain = wordcampIndex > 0 ? hostParts[wordcampIndex - 1] : '';
+            const year = (url.pathname.match(/\/(\d{4})(?:\/|$)/) || [])[1] || '';
+
+            if (subdomain && year) {
+                return subdomain + '.' + year;
+            }
+
+            return normalizeWccEventUrl(eventUrl);
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function renderShareQr(shareUrl) {
+        nodes.shareQr.replaceChildren();
+
+        try {
+            nodes.shareQr.innerHTML = createQrSvg(shareUrl);
+        } catch (error) {
+            nodes.shareQr.append(element('span', {
+                className: 'wcc-share-qr-error',
+                text: 'QR unavailable',
+            }));
+        }
+    }
+
+    function openImportScheduleDialog(requestedWcc) {
+        ensureImportScheduleDialog();
+
+        if (!nodes.importScheduleDialog) {
+            return;
+        }
+
+        nodes.importScheduleDialog.dataset.wccSessionIds = requestedWcc.sessionIds.join('.');
+        updateImportScheduleDialog();
+        nodes.importScheduleDialog.hidden = false;
+        document.body.classList.add('has-wcc-modal');
+
+        if (nodes.importScheduleImport) {
+            nodes.importScheduleImport.focus();
+        }
+    }
+
+    function closeImportScheduleDialog() {
+        if (!nodes.importScheduleDialog || nodes.importScheduleDialog.hidden) {
+            return;
+        }
+
+        nodes.importScheduleDialog.hidden = true;
+        document.body.classList.remove('has-wcc-modal');
+    }
+
+    function ensureImportScheduleDialog() {
+        if (nodes.importScheduleDialog) {
+            return;
+        }
+
+        nodes.importScheduleText = element('p', { className: 'wcc-import-text' });
+        nodes.importScheduleImport = element('button', {
+            className: 'wcc-button',
+            type: 'button',
+            text: 'Import',
+        });
+        nodes.importScheduleSkip = element('button', {
+            className: 'wcc-button',
+            type: 'button',
+            text: 'Skip',
+        });
+        nodes.importScheduleClose = element('button', {
+            className: 'wcc-share-close',
+            type: 'button',
+            'aria-label': 'Close import dialog',
+            text: 'X',
+        });
+
+        nodes.importScheduleImport.addEventListener('click', importSharedSchedule);
+        nodes.importScheduleSkip.addEventListener('click', closeImportScheduleDialog);
+        nodes.importScheduleClose.addEventListener('click', closeImportScheduleDialog);
+
+        const panel = element('div', {
+            className: 'wcc-share-panel wcc-import-panel',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-labelledby': 'wcc-import-title',
+        });
+        const actions = element('div', { className: 'wcc-modal-actions' });
+        actions.append(nodes.importScheduleSkip, nodes.importScheduleImport);
+        panel.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+        panel.append(
+            nodes.importScheduleClose,
+            element('h2', { id: 'wcc-import-title', text: 'Import Shared Schedule' }),
+            nodes.importScheduleText,
+            actions
+        );
+
+        nodes.importScheduleDialog = element('div', {
+            className: 'wcc-share-dialog',
+            hidden: 'hidden',
+        });
+        nodes.importScheduleDialog.addEventListener('click', closeImportScheduleDialog);
+        nodes.importScheduleDialog.append(panel);
+        document.body.append(nodes.importScheduleDialog);
+    }
+
+    function updateImportScheduleDialog() {
+        const ids = getImportScheduleSessionIds();
+        const count = ids.length;
+
+        nodes.importScheduleText.textContent = count + ' shared session' + (count === 1 ? '' : 's') + ' can be added to your plan.';
+        nodes.importScheduleImport.disabled = state.importingSharedSchedule || !count;
+        nodes.importScheduleImport.textContent = state.importingSharedSchedule ? 'Importing...' : 'Import';
+        nodes.importScheduleSkip.disabled = state.importingSharedSchedule;
+    }
+
+    function getImportScheduleSessionIds() {
+        if (!nodes.importScheduleDialog) {
+            return [];
+        }
+
+        return parseWccSessionIds(nodes.importScheduleDialog.dataset.wccSessionIds || '');
+    }
+
+    async function importSharedSchedule() {
+        if (state.importingSharedSchedule) {
+            return;
+        }
+
+        const ids = getImportScheduleSessionIds();
+        if (!ids.length || !state.schedule || !Array.isArray(state.schedule.sessions)) {
+            closeImportScheduleDialog();
+            return;
+        }
+
+        const savedIds = getSavedSessionIds();
+        const sessionsById = new Map();
+        state.schedule.sessions.forEach(function (session) {
+            sessionsById.set(Number(session.id || 0), session);
+        });
+        const sessionsToImport = ids.filter(function (id) {
+            return !savedIds.has(id) && sessionsById.has(id);
+        }).map(function (id) {
+            return sessionsById.get(id);
+        });
+
+        if (!sessionsToImport.length) {
+            state.alert = { type: 'notice', message: 'The shared sessions are already in your plan or are not available in this schedule.' };
+            closeImportScheduleDialog();
+            render();
+            return;
+        }
+
+        state.importingSharedSchedule = true;
+        updateImportScheduleDialog();
+
+        try {
+            for (let index = 0; index < sessionsToImport.length; index++) {
+                const session = sessionsToImport[index];
+                const createdPost = await createSavedSessionPost(session);
+                addSavedSessionPost(normalizeSavedSessionPost(createdPost, session));
+            }
+
+            state.alert = { type: 'notice', message: sessionsToImport.length + ' shared session' + (sessionsToImport.length === 1 ? '' : 's') + ' added to your plan.' };
+            closeImportScheduleDialog();
+        } catch (error) {
+            state.alert = getErrorAlert(error);
+        } finally {
+            state.importingSharedSchedule = false;
+            updateImportScheduleDialog();
+            render();
+        }
+    }
+
+    function createQrSvg(text) {
+        const matrix = createQrMatrix(text);
+        const quiet = 4;
+        const scale = 8;
+        const size = matrix.length + quiet * 2;
+        const parts = [
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '" width="' + (size * scale) + '" height="' + (size * scale) + '" role="img" aria-label="QR code">',
+            '<rect width="100%" height="100%" fill="#fff"/>',
+        ];
+
+        matrix.forEach(function (row, y) {
+            row.forEach(function (dark, x) {
+                if (dark) {
+                    parts.push('<rect x="' + (x + quiet) + '" y="' + (y + quiet) + '" width="1" height="1" fill="#000"/>');
+                }
+            });
+        });
+
+        parts.push('</svg>');
+        return parts.join('');
+    }
+
+    function createQrMatrix(text) {
+        const bytes = Array.from(new TextEncoder().encode(text));
+        const version = getQrVersionForBytes(bytes.length);
+        const blocks = getQrBlocks(version);
+        const dataCodewordCount = blocks.reduce(function (sum, block) {
+            return sum + block.count * block.data;
+        }, 0);
+        const dataCodewords = buildQrDataCodewords(bytes, version, dataCodewordCount);
+        const finalCodewords = buildQrFinalCodewords(dataCodewords, blocks);
+        const size = 17 + version * 4;
+        const modules = Array.from({ length: size }, function () {
+            return Array(size).fill(false);
+        });
+        const reserved = Array.from({ length: size }, function () {
+            return Array(size).fill(false);
+        });
+
+        drawQrFunctionPatterns(modules, reserved, version);
+        drawQrCodewords(modules, reserved, finalCodewords);
+        drawQrFormatBits(modules, reserved, 0);
+
+        return modules;
+    }
+
+    function getQrVersionForBytes(byteLength) {
+        for (let version = 1; version <= QR_M_BLOCKS.length; version++) {
+            const blocks = getQrBlocks(version);
+            const dataCodewordCount = blocks.reduce(function (sum, block) {
+                return sum + block.count * block.data;
+            }, 0);
+            const lengthBits = version < 10 ? 8 : 16;
+            const totalBits = 4 + lengthBits + byteLength * 8;
+
+            if (totalBits <= dataCodewordCount * 8) {
+                return version;
+            }
+        }
+
+        throw new Error('QR payload is too large.');
+    }
+
+    function buildQrDataCodewords(bytes, version, dataCodewordCount) {
+        const bits = [];
+        const lengthBits = version < 10 ? 8 : 16;
+
+        appendQrBits(bits, 0x4, 4);
+        appendQrBits(bits, bytes.length, lengthBits);
+        bytes.forEach(function (byte) {
+            appendQrBits(bits, byte, 8);
+        });
+
+        const capacityBits = dataCodewordCount * 8;
+        appendQrBits(bits, 0, Math.min(4, capacityBits - bits.length));
+        while (bits.length % 8) {
+            bits.push(0);
+        }
+
+        const codewords = [];
+        for (let index = 0; index < bits.length; index += 8) {
+            let value = 0;
+            for (let bit = 0; bit < 8; bit++) {
+                value = (value << 1) | bits[index + bit];
+            }
+            codewords.push(value);
+        }
+
+        for (let padIndex = 0; codewords.length < dataCodewordCount; padIndex++) {
+            codewords.push(padIndex % 2 ? 0x11 : 0xec);
+        }
+
+        return codewords;
+    }
+
+    function buildQrFinalCodewords(dataCodewords, blockGroups) {
+        const blocks = [];
+        let offset = 0;
+
+        blockGroups.forEach(function (group) {
+            const eccLength = group.total - group.data;
+
+            for (let index = 0; index < group.count; index++) {
+                const data = dataCodewords.slice(offset, offset + group.data);
+                offset += group.data;
+                blocks.push({
+                    data: data,
+                    ecc: computeQrErrorCorrection(data, eccLength),
+                });
+            }
+        });
+
+        const result = [];
+        const maxDataLength = Math.max.apply(null, blocks.map(function (block) {
+            return block.data.length;
+        }));
+        const maxEccLength = Math.max.apply(null, blocks.map(function (block) {
+            return block.ecc.length;
+        }));
+
+        for (let index = 0; index < maxDataLength; index++) {
+            blocks.forEach(function (block) {
+                if (index < block.data.length) {
+                    result.push(block.data[index]);
+                }
+            });
+        }
+
+        for (let index = 0; index < maxEccLength; index++) {
+            blocks.forEach(function (block) {
+                if (index < block.ecc.length) {
+                    result.push(block.ecc[index]);
+                }
+            });
+        }
+
+        return result;
+    }
+
+    function appendQrBits(bits, value, length) {
+        for (let bit = length - 1; bit >= 0; bit--) {
+            bits.push((value >>> bit) & 1);
+        }
+    }
+
+    function drawQrFunctionPatterns(modules, reserved, version) {
+        const size = modules.length;
+
+        drawQrFinder(modules, reserved, 0, 0);
+        drawQrFinder(modules, reserved, size - 7, 0);
+        drawQrFinder(modules, reserved, 0, size - 7);
+
+        for (let index = 8; index < size - 8; index++) {
+            setQrFunctionModule(modules, reserved, index, 6, index % 2 === 0);
+            setQrFunctionModule(modules, reserved, 6, index, index % 2 === 0);
+        }
+
+        getQrAlignmentPositions(version).forEach(function (y) {
+            getQrAlignmentPositions(version).forEach(function (x) {
+                if (!reserved[y][x]) {
+                    drawQrAlignment(modules, reserved, x, y);
+                }
+            });
+        });
+
+        reserveQrFormatBits(modules, reserved);
+        if (version >= 7) {
+            drawQrVersionBits(modules, reserved, version);
+        }
+        setQrFunctionModule(modules, reserved, 8, size - 8, true);
+    }
+
+    function drawQrFinder(modules, reserved, left, top) {
+        for (let dy = -1; dy <= 7; dy++) {
+            for (let dx = -1; dx <= 7; dx++) {
+                const x = left + dx;
+                const y = top + dy;
+                if (x < 0 || y < 0 || y >= modules.length || x >= modules.length) {
+                    continue;
+                }
+
+                const dark = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6 &&
+                    (dx === 0 || dx === 6 || dy === 0 || dy === 6 || dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4);
+                setQrFunctionModule(modules, reserved, x, y, dark);
+            }
+        }
+    }
+
+    function drawQrAlignment(modules, reserved, centerX, centerY) {
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                setQrFunctionModule(
+                    modules,
+                    reserved,
+                    centerX + dx,
+                    centerY + dy,
+                    Math.max(Math.abs(dx), Math.abs(dy)) !== 1
+                );
+            }
+        }
+    }
+
+    function reserveQrFormatBits(modules, reserved) {
+        const size = modules.length;
+
+        for (let index = 0; index < 15; index++) {
+            const primary = getQrFormatPrimaryCoordinate(index);
+            const secondary = getQrFormatSecondaryCoordinate(index, size);
+
+            setQrFunctionModule(modules, reserved, primary[0], primary[1], false);
+            setQrFunctionModule(modules, reserved, secondary[0], secondary[1], false);
+        }
+    }
+
+    function drawQrVersionBits(modules, reserved, version) {
+        const size = modules.length;
+        const bits = getQrVersionBits(version);
+
+        for (let index = 0; index < 18; index++) {
+            const dark = ((bits >>> index) & 1) === 1;
+            const a = size - 11 + index % 3;
+            const b = Math.floor(index / 3);
+
+            setQrFunctionModule(modules, reserved, a, b, dark);
+            setQrFunctionModule(modules, reserved, b, a, dark);
+        }
+    }
+
+    function drawQrFormatBits(modules, reserved, mask) {
+        const size = modules.length;
+        const bits = getQrFormatBits(mask);
+
+        for (let index = 0; index < 15; index++) {
+            const dark = ((bits >>> index) & 1) === 1;
+            const primary = getQrFormatPrimaryCoordinate(index);
+            const secondary = getQrFormatSecondaryCoordinate(index, size);
+
+            setQrFunctionModule(modules, reserved, primary[0], primary[1], dark);
+            setQrFunctionModule(modules, reserved, secondary[0], secondary[1], dark);
+        }
+
+        setQrFunctionModule(modules, reserved, 8, size - 8, true);
+    }
+
+    function getQrFormatPrimaryCoordinate(index) {
+        if (index < 6) {
+            return [8, index];
+        }
+        if (index < 8) {
+            return [8, index + 1];
+        }
+        if (index === 8) {
+            return [7, 8];
+        }
+        return [14 - index, 8];
+    }
+
+    function getQrFormatSecondaryCoordinate(index, size) {
+        if (index < 8) {
+            return [size - 1 - index, 8];
+        }
+        return [8, size - 15 + index];
+    }
+
+    function drawQrCodewords(modules, reserved, codewords) {
+        const size = modules.length;
+        const bits = [];
+        let bitIndex = 0;
+        let upward = true;
+
+        codewords.forEach(function (codeword) {
+            appendQrBits(bits, codeword, 8);
+        });
+
+        for (let right = size - 1; right >= 1; right -= 2) {
+            if (right === 6) {
+                right--;
+            }
+
+            for (let vertical = 0; vertical < size; vertical++) {
+                const y = upward ? size - 1 - vertical : vertical;
+                for (let column = 0; column < 2; column++) {
+                    const x = right - column;
+                    if (reserved[y][x]) {
+                        continue;
+                    }
+
+                    const rawBit = bitIndex < bits.length ? bits[bitIndex] === 1 : false;
+                    const maskedBit = rawBit !== ((x + y) % 2 === 0);
+                    modules[y][x] = maskedBit;
+                    bitIndex++;
+                }
+            }
+
+            upward = !upward;
+        }
+    }
+
+    function setQrFunctionModule(modules, reserved, x, y, dark) {
+        if (x < 0 || y < 0 || y >= modules.length || x >= modules.length) {
+            return;
+        }
+
+        modules[y][x] = Boolean(dark);
+        reserved[y][x] = true;
+    }
+
+    function getQrFormatBits(mask) {
+        let data = mask;
+        let bits = data << 10;
+
+        for (let bit = getQrBitLength(bits) - getQrBitLength(0x537); bit >= 0; bit--) {
+            bits ^= 0x537 << bit;
+        }
+
+        return ((data << 10) | bits) ^ 0x5412;
+    }
+
+    function getQrVersionBits(version) {
+        let bits = version << 12;
+
+        for (let bit = getQrBitLength(bits) - getQrBitLength(0x1f25); bit >= 0; bit--) {
+            bits ^= 0x1f25 << bit;
+        }
+
+        return (version << 12) | bits;
+    }
+
+    function getQrBitLength(value) {
+        let length = 0;
+
+        while (value) {
+            length++;
+            value >>>= 1;
+        }
+
+        return length;
+    }
+
+    function getQrAlignmentPositions(version) {
+        return QR_ALIGNMENT_POSITIONS[version] || [];
+    }
+
+    function getQrBlocks(version) {
+        return QR_M_BLOCKS[version - 1].map(function (block) {
+            return {
+                count: block[0],
+                total: block[1],
+                data: block[2],
+            };
+        });
+    }
+
+    function computeQrErrorCorrection(data, degree) {
+        const divisor = getQrGeneratorPolynomial(degree);
+        const result = Array(degree).fill(0);
+
+        data.forEach(function (byte) {
+            const factor = byte ^ result.shift();
+            result.push(0);
+            divisor.forEach(function (coefficient, index) {
+                result[index] ^= qrGfMultiply(coefficient, factor);
+            });
+        });
+
+        return result;
+    }
+
+    function getQrGeneratorPolynomial(degree) {
+        let result = [1];
+
+        for (let index = 0; index < degree; index++) {
+            const next = Array(result.length + 1).fill(0);
+            result.forEach(function (coefficient, coefficientIndex) {
+                next[coefficientIndex] ^= coefficient;
+                next[coefficientIndex + 1] ^= qrGfMultiply(coefficient, QR_GF_EXP[index]);
+            });
+            result = next;
+        }
+
+        return result.slice(1);
+    }
+
+    function qrGfMultiply(a, b) {
+        if (!a || !b) {
+            return 0;
+        }
+
+        return QR_GF_EXP[QR_GF_LOG[a] + QR_GF_LOG[b]];
+    }
+
+    function createQrGfTables() {
+        const exp = Array(512).fill(0);
+        const log = Array(256).fill(0);
+        let value = 1;
+
+        for (let index = 0; index < 255; index++) {
+            exp[index] = value;
+            log[value] = index;
+            value <<= 1;
+            if (value & 0x100) {
+                value ^= 0x11d;
+            }
+        }
+
+        for (let index = 255; index < exp.length; index++) {
+            exp[index] = exp[index - 255];
+        }
+
+        return { exp: exp, log: log };
+    }
+
+    const QR_M_BLOCKS = [
+        [[1, 26, 16]],
+        [[1, 44, 28]],
+        [[1, 70, 44]],
+        [[2, 50, 32]],
+        [[2, 67, 43]],
+        [[4, 43, 27]],
+        [[4, 49, 31]],
+        [[2, 60, 38], [2, 61, 39]],
+        [[3, 58, 36], [2, 59, 37]],
+        [[4, 69, 43], [1, 70, 44]],
+        [[1, 80, 50], [4, 81, 51]],
+        [[6, 58, 36], [2, 59, 37]],
+        [[8, 59, 37], [1, 60, 38]],
+        [[4, 64, 40], [5, 65, 41]],
+        [[5, 65, 41], [5, 66, 42]],
+        [[7, 73, 45], [3, 74, 46]],
+        [[10, 74, 46], [1, 75, 47]],
+        [[9, 69, 43], [4, 70, 44]],
+        [[3, 70, 44], [11, 71, 45]],
+        [[3, 67, 41], [13, 68, 42]],
+    ];
+    const QR_ALIGNMENT_POSITIONS = {
+        1: [],
+        2: [6, 18],
+        3: [6, 22],
+        4: [6, 26],
+        5: [6, 30],
+        6: [6, 34],
+        7: [6, 22, 38],
+        8: [6, 24, 42],
+        9: [6, 26, 46],
+        10: [6, 28, 50],
+        11: [6, 30, 54],
+        12: [6, 32, 58],
+        13: [6, 34, 62],
+        14: [6, 26, 46, 66],
+        15: [6, 26, 48, 70],
+        16: [6, 26, 50, 74],
+        17: [6, 30, 54, 78],
+        18: [6, 30, 56, 82],
+        19: [6, 30, 58, 86],
+        20: [6, 34, 62, 90],
+    };
+    const QR_GF_TABLES = createQrGfTables();
+    const QR_GF_EXP = QR_GF_TABLES.exp;
+    const QR_GF_LOG = QR_GF_TABLES.log;
 
     function renderEvents() {
         if (!nodes.eventList || !nodes.eventCount) {
@@ -4256,6 +5065,121 @@
         return normalizeRouteSlug(config.routeWordcampSlug || querySlug);
     }
 
+    function getRequestedWccValue() {
+        return (new URLSearchParams(window.location.search).get('wcc1') || '').trim();
+    }
+
+    function parseWccParameter(rawValue) {
+        let value = String(rawValue || '').trim();
+        if (!value) {
+            return null;
+        }
+
+        const legacyParts = value.split(';');
+        const isLegacyFormat = legacyParts.length > 1 || /^[^_]+,\d{4}(?:_|$)/.test(value);
+        const parts = isLegacyFormat ? legacyParts : value.split('_');
+        const eventPart = (parts.shift() || '').trim();
+        const sessionPart = parts.join(isLegacyFormat ? ';' : '_');
+        let eventUrl = '';
+        let eventSlug = '';
+        let eventYear = '';
+
+        if (/^https?:\/\//i.test(eventPart)) {
+            eventUrl = normalizeWccEventUrl(eventPart);
+        } else {
+            const eventParts = isLegacyFormat
+                ? eventPart.split(',')
+                : (eventPart.match(/^(.+)\.(\d{4})$/) || []).slice(1);
+            eventSlug = eventParts.length === 2 ? normalizeWccEventSlug(eventParts[0]) : '';
+            eventYear = eventParts.length === 2 ? String(eventParts[1] || '').trim() : '';
+
+            if (eventSlug && /^\d{4}$/.test(eventYear)) {
+                eventUrl = 'https://' + eventSlug + '.wordcamp.org/' + eventYear + '/';
+            }
+        }
+
+        if (!eventUrl) {
+            return null;
+        }
+
+        return {
+            raw: rawValue,
+            eventUrl: eventUrl,
+            eventSlug: eventSlug,
+            eventYear: eventYear,
+            sessionIds: parseWccSessionIds(sessionPart),
+        };
+    }
+
+    function normalizeWccEventUrl(value) {
+        try {
+            const url = new URL(value);
+            const protocol = url.protocol.toLowerCase();
+            const host = url.hostname.toLowerCase();
+
+            if ((protocol !== 'http:' && protocol !== 'https:') || !isAllowedWordcampHost(host)) {
+                return '';
+            }
+
+            return protocol + '//' + host + (url.pathname || '/').replace(/\/?$/, '/');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function isAllowedWordcampHost(host) {
+        return host === 'wordcamp.org' || host.slice(-13) === '.wordcamp.org';
+    }
+
+    function normalizeWccEventSlug(value) {
+        const words = normalizeSlugSource(value).split(' ').filter(Boolean);
+
+        if (words[0] === 'wordcamp') {
+            words.shift();
+        }
+
+        return words.join('-');
+    }
+
+    function parseWccSessionIds(value) {
+        return String(value || '').split(/[,.]/).map(function (id) {
+            return Number(id.trim());
+        }).filter(function (id, index, ids) {
+            return Number.isInteger(id) && id > 0 && ids.indexOf(id) === index;
+        });
+    }
+
+    function buildWccEvent(requestedWcc) {
+        return {
+            id: 0,
+            title: getWccEventTitle(requestedWcc),
+            location: '',
+            start: null,
+            end: null,
+            event_url: requestedWcc.eventUrl,
+            timezone: '',
+            country: '',
+            coordinates: null,
+            venue: {
+                name: '',
+                address: '',
+                coordinates: null,
+            },
+        };
+    }
+
+    function getWccEventTitle(requestedWcc) {
+        if (!requestedWcc.eventSlug || !requestedWcc.eventYear) {
+            return requestedWcc.eventUrl;
+        }
+
+        const name = requestedWcc.eventSlug.split('-').filter(Boolean).map(function (word) {
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        }).join(' ');
+
+        return ['WordCamp', name, requestedWcc.eventYear].filter(Boolean).join(' ');
+    }
+
     function getEventSlug(event) {
         const words = getEventSlugWords(event);
 
@@ -4335,6 +5259,12 @@
         }
 
         return base.replace(/\/?$/, '/') + encodeURIComponent(slug) + '/';
+    }
+
+    function getWccPlanUrl(rawWccValue) {
+        const base = config.planBaseUrl || config.planUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/plan-your/') : '/wordcamp-companion/plan-your/');
+
+        return base.replace(/\/?$/, '/') + 'schedule/?wcc1=' + encodeURIComponent(rawWccValue);
     }
 
     function getCompanionUrl() {

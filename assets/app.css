@@ -433,13 +433,82 @@ body.has-wcc-modal {
 }
 
 .wcc-share-qr {
-    display: block;
+    display: grid;
+    place-items: center;
     width: min(100%, 360px);
-    height: auto;
+    min-height: 240px;
     image-rendering: pixelated;
     background: #fff;
     border: 1px solid var(--wcc-border);
     border-radius: 6px;
+    overflow: hidden;
+}
+
+.wcc-share-qr svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 360px;
+}
+
+.wcc-share-qr-error {
+    color: var(--wcc-muted);
+    font-size: 0.95rem;
+}
+
+.wcc-share-options {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.wcc-share-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    background: var(--wcc-surface);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.wcc-share-option.is-checked {
+    border-color: var(--wcc-primary);
+    color: var(--wcc-primary);
+}
+
+.wcc-share-option.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.wcc-share-link {
+    max-width: 100%;
+}
+
+.wcc-import-panel {
+    justify-items: stretch;
+}
+
+.wcc-import-text {
+    margin: 0;
+    color: var(--wcc-muted);
+    line-height: 1.45;
+}
+
+.wcc-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 .wcc-tab.is-active {
