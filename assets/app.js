@@ -1383,7 +1383,7 @@
                 href: shareUrl,
                 target: '_blank',
                 rel: 'noopener noreferrer',
-                text: 'Open link',
+                text: 'my.wordpress.net',
             })
         );
 
