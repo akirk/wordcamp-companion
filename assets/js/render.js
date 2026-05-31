@@ -1762,7 +1762,7 @@
         let limit = Math.min(defaultLimit, visibleSteps.length);
 
         if (sessionIndex === -1 || sessionIndex >= limit) {
-            return visibleSteps.slice(0, limit);
+            return visibleSteps.slice(0, getCompanionLimitThroughVisibleDayEnd(visibleSteps, limit));
         }
 
         for (let index = sessionIndex + 1; index < visibleSteps.length; index++) {
@@ -1778,7 +1778,31 @@
             }
         }
 
-        return visibleSteps.slice(0, limit);
+        return visibleSteps.slice(0, getCompanionLimitThroughVisibleDayEnd(visibleSteps, limit));
+    }
+
+    function getCompanionLimitThroughVisibleDayEnd(visibleSteps, limit) {
+        if (!limit || limit >= visibleSteps.length) {
+            return limit;
+        }
+
+        const lastStep = visibleSteps[limit - 1];
+        if (!lastStep || !lastStep.dayKey || lastStep.type === 'day-end') {
+            return limit;
+        }
+
+        for (let index = limit; index < visibleSteps.length; index++) {
+            const step = visibleSteps[index];
+            if (!step || step.dayKey !== lastStep.dayKey) {
+                break;
+            }
+
+            if (step.type === 'day-end') {
+                return index + 1;
+            }
+        }
+
+        return limit;
     }
 
     function getAnimatedCompanionSteps(steps, now) {
