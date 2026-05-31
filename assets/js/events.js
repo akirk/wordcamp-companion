@@ -411,15 +411,21 @@
         state.loadingSchedule = true;
         state.alert = null;
         const previousSchedule = state.schedule;
+        const requestedEventUrl = state.selectedEventUrl;
         render();
 
         try {
-            state.schedule = await api(mode === 'full' ? 'schedule' : 'companion', {
+            const schedule = await api(mode === 'full' ? 'schedule' : 'companion', {
                 query: {
-                    event_url: state.selectedEventUrl,
+                    event_url: requestedEventUrl,
                     refresh: refresh ? '1' : '0',
                 },
             });
+            if (state.selectedEventUrl !== requestedEventUrl) {
+                return;
+            }
+
+            state.schedule = schedule;
             syncSelectedEventScheduleMetadata(state.schedule);
             state.loadingGapKey = '';
             state.loadedGapKeys = {};
@@ -443,18 +449,23 @@
         }
 
         state.loadingGapKey = gapKey;
+        const requestedEventUrl = state.selectedEventUrl;
         render();
 
         try {
             const data = await api('gap-candidates', {
                 query: {
-                    event_url: state.selectedEventUrl,
+                    event_url: requestedEventUrl,
                     refresh: '0',
                     day_key: gap.dayKey || gap.day_key || '',
                     start: String(Number(gap.start || 0)),
                     end: String(Number(gap.end || 0)),
                 },
             });
+            if (!state.schedule || state.selectedEventUrl !== requestedEventUrl) {
+                return;
+            }
+
             syncSelectedEventScheduleMetadata(data);
             mergeLoadedGapCandidates(gapKey, Array.isArray(data.gaps) ? data.gaps : []);
             state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
@@ -488,15 +499,20 @@
         }
 
         state.loadingInitialGaps = true;
+        const requestedEventUrl = state.selectedEventUrl;
         render();
 
         try {
             const data = await api('gap-candidates', {
                 query: {
-                    event_url: state.selectedEventUrl,
+                    event_url: requestedEventUrl,
                     refresh: '0',
                 },
             });
+            if (!state.schedule || state.selectedEventUrl !== requestedEventUrl) {
+                return;
+            }
+
             syncSelectedEventScheduleMetadata(data);
             state.schedule.days = Object.assign({}, state.schedule.days || {}, data.days || {});
             state.schedule.gaps = Array.isArray(data.gaps) ? data.gaps.filter(hasGapCandidates) : [];
