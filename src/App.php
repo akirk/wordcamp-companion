@@ -120,7 +120,6 @@ class App extends BaseApp {
     private function enqueue_assets(): void {
         $plugin_file = dirname( __DIR__ ) . '/wordcamp-companion.php';
         $css_path = dirname( __DIR__ ) . '/assets/app.css';
-        $js_path = dirname( __DIR__ ) . '/assets/app.js';
         $version = defined( 'WORDCAMP_COMPANION_VERSION' ) ? WORDCAMP_COMPANION_VERSION : '1.0.0';
         $asset_version = defined( 'WORDCAMP_COMPANION_ASSET_VERSION' ) ? WORDCAMP_COMPANION_ASSET_VERSION : $version;
 
@@ -150,20 +149,34 @@ class App extends BaseApp {
             0
         );
 
-        if ( file_exists( $js_path ) ) {
+        $script_assets = [
+            'wordcamp-companion-state'           => 'assets/js/state.js',
+            'wordcamp-companion-dom'             => 'assets/js/dom.js',
+            'wordcamp-companion-api'             => 'assets/js/api.js',
+            'wordcamp-companion-qr'              => 'assets/js/qr.js',
+            'wordcamp-companion-events'          => 'assets/js/events.js',
+            'wordcamp-companion-schedule-model'  => 'assets/js/schedule-model.js',
+            'wordcamp-companion-companion-model' => 'assets/js/companion-model.js',
+            'wordcamp-companion-render'          => 'assets/js/render.js',
+            'wordcamp-companion-debug-clock'     => 'assets/js/debug-clock.js',
+            'wordcamp-companion'                 => 'assets/js/bootstrap.js',
+        ];
+        $previous_script_handle = null;
+
+        foreach ( $script_assets as $handle => $relative_path ) {
+            $script_path = dirname( __DIR__ ) . '/' . $relative_path;
+            if ( ! file_exists( $script_path ) ) {
+                continue;
+            }
+
             wp_app_enqueue_script(
-                'wordcamp-companion',
-                plugins_url( 'assets/app.js', $plugin_file ),
-                [],
-                $asset_version . '-' . filemtime( $js_path )
+                $handle,
+                plugins_url( $relative_path, $plugin_file ),
+                $previous_script_handle ? [ $previous_script_handle ] : [],
+                $asset_version . '-' . filemtime( $script_path )
             );
-        } else {
-            wp_app_enqueue_script(
-                'wordcamp-companion',
-                plugins_url( 'assets/app.js', $plugin_file ),
-                [],
-                $version
-            );
+
+            $previous_script_handle = $handle;
         }
     }
 
