@@ -4,6 +4,7 @@
     const TRACK_CHANGE_LEAD_SECONDS = WCC.TRACK_CHANGE_LEAD_SECONDS;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = WCC.DEBUG_TIME_SLIDER_RANGE_MINUTES;
     const DEBUG_TIME_SLIDER_STEP_MINUTES = WCC.DEBUG_TIME_SLIDER_STEP_MINUTES;
+    const FALLBACK_DAY_END_HOUR = 18;
     const config = WCC.config;
     const state = WCC.state;
     const nodes = WCC.nodes;
@@ -854,6 +855,7 @@
 
     function getKnownDayEnd(dayKey, sessions) {
         let dayEnd = getDayEnd(dayKey) || 0;
+        const dayStart = getDayStart(dayKey) || getFirstSessionStart(sessions);
 
         (sessions || []).forEach(function (session) {
             dayEnd = Math.max(dayEnd, Number(session.end || session.start || 0));
@@ -863,7 +865,94 @@
             dayEnd = Math.max(dayEnd, Number(gap.end || gap.start || 0));
         });
 
+        if (dayStart && dayEnd <= dayStart) {
+            dayEnd = Math.max(dayEnd, getFallbackDayEnd(dayKey, dayStart) || 0);
+        }
+
         return dayEnd || null;
+    }
+
+    function getFirstSessionStart(sessions) {
+        const sortedSessions = (sessions || []).filter(function (session) {
+            return session && session.start;
+        }).sort(compareSessions);
+
+        return sortedSessions.length ? Number(sortedSessions[0].start || 0) : 0;
+    }
+
+    function getFallbackDayEnd(dayKey, dayStart) {
+        const fallback = getTimestampForLocalDateTime(dayKey, FALLBACK_DAY_END_HOUR, 0, getSelectedTimezone());
+
+        return fallback && fallback > dayStart ? fallback : null;
+    }
+
+    function getTimestampForLocalDateTime(dayKey, hour, minute, timeZone) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey || '');
+        if (!match) {
+            return null;
+        }
+
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const desiredAsUtc = Math.floor(Date.UTC(year, month - 1, day, hour, minute, 0) / 1000);
+        let timestamp = desiredAsUtc;
+
+        for (let index = 0; index < 3; index++) {
+            const parts = getLocalDateTimeParts(timestamp, timeZone);
+            if (!parts) {
+                return null;
+            }
+
+            const renderedAsUtc = Math.floor(Date.UTC(
+                parts.year,
+                parts.month - 1,
+                parts.day,
+                parts.hour,
+                parts.minute,
+                parts.second
+            ) / 1000);
+            const delta = desiredAsUtc - renderedAsUtc;
+
+            if (!delta) {
+                return getDateKey(timestamp, timeZone) === dayKey ? timestamp : null;
+            }
+
+            timestamp += delta;
+        }
+
+        return getDateKey(timestamp, timeZone) === dayKey ? timestamp : null;
+    }
+
+    function getLocalDateTimeParts(timestamp, timeZone) {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: timeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+        }).formatToParts(new Date(timestamp * 1000));
+        const map = {};
+
+        parts.forEach(function (part) {
+            map[part.type] = part.value;
+        });
+
+        if (!map.year || !map.month || !map.day || !map.hour || !map.minute || !map.second) {
+            return null;
+        }
+
+        return {
+            year: Number(map.year),
+            month: Number(map.month),
+            day: Number(map.day),
+            hour: Number(map.hour) % 24,
+            minute: Number(map.minute),
+            second: Number(map.second),
+        };
     }
 
     function getScheduleDayKeys() {
@@ -987,7 +1076,7 @@
         }
 
         const lastSaved = savedBlocks[savedBlocks.length - 1];
-        addLazyGap(gaps, dayKey, lastSaved.end || lastSaved.start, getDayEnd(dayKey) || lastSaved.end || lastSaved.start);
+        addLazyGap(gaps, dayKey, lastSaved.end || lastSaved.start, getKnownDayEnd(dayKey, sessions) || lastSaved.end || lastSaved.start);
 
         return gaps;
     }
