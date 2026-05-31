@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260531.1';
+    const SCRIPT_BUILD = '20260531.2';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -213,6 +213,7 @@
                 closeImportScheduleDialog();
             }
         });
+        document.addEventListener('paste', handleSharedSchedulePaste);
 
         if (nodes.changeEvent && nodes.changeEvent.tagName.toLowerCase() === 'button') {
             nodes.changeEvent.addEventListener('click', function () {
@@ -274,12 +275,97 @@
         return Boolean(active && active.classList && active.classList.contains('wcc-note-editor'));
     }
 
+    function handleSharedSchedulePaste(event) {
+        const clipboard = event.clipboardData || window.clipboardData;
+        const text = clipboard && typeof clipboard.getData === 'function' ? clipboard.getData('text') : '';
+        const rawWccValue = getSharedScheduleWccValueFromText(text);
+        const requestedWcc = rawWccValue ? parseWccParameter(rawWccValue) : null;
+
+        if (!requestedWcc) {
+            return;
+        }
+
+        event.preventDefault();
+        closeShareDialog();
+        closeImportScheduleDialog();
+        window.location.href = getCompanionImportUrl(rawWccValue);
+    }
+
+    function getSharedScheduleWccValueFromText(text) {
+        const candidates = getSharedScheduleUrlCandidates(text);
+
+        for (let index = 0; index < candidates.length; index++) {
+            const value = getSharedScheduleWccValueFromUrl(candidates[index]);
+            if (value) {
+                return value;
+            }
+        }
+
+        return '';
+    }
+
+    function getSharedScheduleUrlCandidates(text) {
+        const value = String(text || '').trim();
+        const candidates = [];
+        const urlMatches = value.match(/https?:\/\/[^\s<>"']+/g) || [];
+        const bareShareMatches = value.match(/\bmy\.wordpress\.net\/[^\s<>"']+/gi) || [];
+
+        urlMatches.forEach(function (candidate) {
+            candidates.push(cleanPastedUrlCandidate(candidate));
+        });
+        bareShareMatches.forEach(function (candidate) {
+            candidates.push(cleanPastedUrlCandidate('https://' + candidate));
+        });
+        if (value) {
+            candidates.push(cleanPastedUrlCandidate(value));
+        }
+
+        return candidates.filter(Boolean).filter(function (candidate, index, list) {
+            return list.indexOf(candidate) === index;
+        });
+    }
+
+    function cleanPastedUrlCandidate(candidate) {
+        return String(candidate || '').trim().replace(/&amp;/g, '&').replace(/[),.;]+$/, '');
+    }
+
+    function getSharedScheduleWccValueFromUrl(candidate) {
+        try {
+            const url = new URL(candidate, window.location.href);
+            const value = (url.searchParams.get('wcc1') || '').trim();
+
+            if (!value || !isAllowedSharedScheduleUrl(url)) {
+                return '';
+            }
+
+            return value;
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function isAllowedSharedScheduleUrl(url) {
+        const host = url && url.hostname ? url.hostname.toLowerCase() : '';
+        const allowedHosts = ['my.wordpress.net', window.location.hostname.toLowerCase()];
+
+        try {
+            const shareHost = new URL(config.shareUrl || '', window.location.href).hostname.toLowerCase();
+            if (shareHost) {
+                allowedHosts.push(shareHost);
+            }
+        } catch (error) {
+            // Ignore malformed configured share URLs; the pasted URL still has to match the app or default share host.
+        }
+
+        return allowedHosts.indexOf(host) !== -1;
+    }
+
     async function loadInitialData() {
         const requestedWccRaw = getRequestedWccValue();
         const requestedWcc = parseWccParameter(requestedWccRaw);
 
-        if (requestedWccRaw && state.page !== 'plan') {
-            window.location.replace(getWccPlanUrl(requestedWccRaw));
+        if (requestedWccRaw && state.page !== 'plan' && state.page !== 'companion') {
+            window.location.replace(getCompanionImportUrl(requestedWccRaw));
             return;
         }
 
@@ -319,7 +405,7 @@
                 state.alert = { type: 'error', message: 'WordCamp schedule link is invalid.' };
             } else if (requestedWcc) {
                 handledRequestedEvent = true;
-                await selectWccSchedule(requestedWcc);
+                await selectWccSchedule(requestedWcc, { stayOnCompanion: state.page === 'companion' });
             } else if (requestedSlug) {
                 const requestedEvent = getEventBySlug(requestedSlug);
                 if (requestedEvent) {
@@ -430,15 +516,17 @@
         }
     }
 
-    async function selectWccSchedule(requestedWcc) {
+    async function selectWccSchedule(requestedWcc, options) {
+        options = options || {};
         const event = buildWccEvent(requestedWcc);
         const previousSelectedEventUrl = state.selectedEventUrl;
+        const previousView = state.view;
         const previousSchedule = state.schedule;
         const previousLoadedGapKeys = Object.assign({}, state.loadedGapKeys);
         const previousOpenGapKey = state.openGapKey;
 
         state.selectedEventUrl = event.event_url;
-        state.view = 'schedule';
+        state.view = options.stayOnCompanion ? 'companion' : 'schedule';
         state.pickerOpen = false;
         state.schedule = null;
         state.loadedGapKeys = {};
@@ -460,6 +548,7 @@
             }
         } catch (error) {
             state.selectedEventUrl = previousSelectedEventUrl;
+            state.view = previousView;
             state.schedule = previousSchedule;
             state.loadedGapKeys = previousLoadedGapKeys;
             state.openGapKey = previousOpenGapKey;
@@ -1439,6 +1528,17 @@
             rel: 'noopener noreferrer',
             text: 'Open link',
         });
+        nodes.shareImportNote = element('p', { className: 'wcc-share-note' });
+        nodes.shareImportNote.append(
+            'If you have ',
+            element('a', {
+                href: 'https://github.com/akirk/wordcamp-companion',
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                text: 'WordCamp Companion',
+            }),
+            ' installed on your own WordPress site, paste this link there to import these sessions.'
+        );
 
         const options = element('fieldset', {
             className: 'wcc-share-options',
@@ -1454,7 +1554,8 @@
             element('h2', { id: 'wcc-share-title', text: 'Share WordCamp Companion' }),
             nodes.shareQr,
             options,
-            nodes.shareLink
+            nodes.shareLink,
+            nodes.shareImportNote
         );
 
         nodes.shareDialog = element('div', {
@@ -1510,6 +1611,7 @@
         nodes.shareOptionSchedule.input.disabled = !canShareSchedule;
         nodes.shareOptionSchedule.label.classList.toggle('is-disabled', !canShareSchedule);
         nodes.shareLink.href = shareUrl;
+        setHidden(nodes.shareImportNote, mode !== 'schedule' || !getCurrentWccSharePayload());
 
         renderShareQr(shareUrl);
     }
@@ -1604,7 +1706,9 @@
             return;
         }
 
+        nodes.importScheduleDialog.dataset.wccEventUrl = requestedWcc.eventUrl;
         nodes.importScheduleDialog.dataset.wccSessionIds = requestedWcc.sessionIds.join('.');
+        nodes.importScheduleDialog.dataset.wccSelectedSessionIds = requestedWcc.sessionIds.join('.');
         updateImportScheduleDialog();
         nodes.importScheduleDialog.hidden = false;
         document.body.classList.add('has-wcc-modal');
@@ -1629,10 +1733,11 @@
         }
 
         nodes.importScheduleText = element('p', { className: 'wcc-import-text' });
+        nodes.importSchedulePreview = element('ul', { className: 'wcc-import-preview' });
         nodes.importScheduleImport = element('button', {
             className: 'wcc-button',
             type: 'button',
-            text: 'Import',
+            text: 'Add selected',
         });
         nodes.importScheduleSkip = element('button', {
             className: 'wcc-button',
@@ -1665,6 +1770,7 @@
             nodes.importScheduleClose,
             element('h2', { id: 'wcc-import-title', text: 'Import Shared Schedule' }),
             nodes.importScheduleText,
+            nodes.importSchedulePreview,
             actions
         );
 
@@ -1678,13 +1784,183 @@
     }
 
     function updateImportScheduleDialog() {
-        const ids = getImportScheduleSessionIds();
-        const count = ids.length;
+        const preview = getImportSchedulePreview();
+        const event = getSelectedEvent();
+        const eventTitle = event ? getEventTitle(event) : 'this WordCamp';
+        const savedIds = getSavedSessionIds();
+        const selectedIds = getImportScheduleSelectedSessionIds();
+        const selectedImportCount = getSelectableImportSessions(preview.sessions, savedIds, selectedIds).length;
+        const missingCount = preview.missingIds.length;
+        const foundText = preview.sessions.length + ' of ' + preview.ids.length + ' shared session' + (preview.ids.length === 1 ? '' : 's');
 
-        nodes.importScheduleText.textContent = count + ' shared session' + (count === 1 ? '' : 's') + ' can be added to your plan.';
-        nodes.importScheduleImport.disabled = state.importingSharedSchedule || !count;
-        nodes.importScheduleImport.textContent = state.importingSharedSchedule ? 'Importing...' : 'Import';
+        nodes.importScheduleText.textContent = foundText + ' found for ' + eventTitle + '. Select the sessions to add to your plan' + (missingCount ? '. ' + missingCount + ' shared session' + (missingCount === 1 ? ' was' : 's were') + ' not found in the published schedule.' : '.');
+        renderImportSchedulePreview(preview, savedIds, selectedIds);
+        nodes.importScheduleImport.disabled = state.importingSharedSchedule || !selectedImportCount;
+        nodes.importScheduleImport.textContent = state.importingSharedSchedule ? 'Adding...' : 'Add selected';
         nodes.importScheduleSkip.disabled = state.importingSharedSchedule;
+    }
+
+    function getImportSchedulePreview() {
+        const ids = getImportScheduleSessionIds();
+        const sessionsById = new Map();
+        const sessions = [];
+        const missingIds = [];
+
+        if (state.schedule && Array.isArray(state.schedule.sessions)) {
+            state.schedule.sessions.forEach(function (session) {
+                const id = Number(session.id || 0);
+                if (id) {
+                    sessionsById.set(id, session);
+                }
+            });
+        }
+
+        ids.forEach(function (id) {
+            if (sessionsById.has(id)) {
+                sessions.push(sessionsById.get(id));
+            } else {
+                missingIds.push(id);
+            }
+        });
+
+        return {
+            ids: ids,
+            sessions: sessions,
+            missingIds: missingIds,
+        };
+    }
+
+    function renderImportSchedulePreview(preview, savedIds, selectedIds) {
+        if (!nodes.importSchedulePreview) {
+            return;
+        }
+
+        nodes.importSchedulePreview.replaceChildren();
+
+        if (!preview.ids.length) {
+            nodes.importSchedulePreview.append(element('li', {
+                className: 'wcc-import-preview-empty',
+                text: 'This shared link does not include saved sessions.',
+            }));
+            return;
+        }
+
+        if (!preview.sessions.length) {
+            nodes.importSchedulePreview.append(element('li', {
+                className: 'wcc-import-preview-empty',
+                text: 'No matching sessions were found in the published schedule.',
+            }));
+            return;
+        }
+
+        preview.sessions.forEach(function (session) {
+            const id = Number(session.id || 0);
+            nodes.importSchedulePreview.append(renderImportSchedulePreviewItem(session, {
+                alreadySaved: savedIds.has(id),
+                selected: selectedIds.has(id),
+            }));
+        });
+
+        if (preview.missingIds.length) {
+            nodes.importSchedulePreview.append(element('li', {
+                className: 'wcc-import-preview-empty',
+                text: preview.missingIds.length + ' shared session' + (preview.missingIds.length === 1 ? '' : 's') + ' could not be previewed.',
+            }));
+        }
+    }
+
+    function renderImportSchedulePreviewItem(session, options) {
+        options = options || {};
+        const sessionId = Number(session && session.id || 0);
+        const alreadySaved = Boolean(options.alreadySaved);
+        const item = element('li', { className: 'wcc-import-preview-item' + (alreadySaved ? ' is-saved' : '') });
+        const content = element('span', { className: 'wcc-import-preview-content' });
+        const title = element('strong', { text: session.title || 'Untitled session' });
+        const meta = getImportScheduleSessionMeta(session);
+        const sessionLink = createImportScheduleSessionLink(session);
+
+        content.append(title);
+        if (meta) {
+            content.append(element('span', { className: 'wcc-import-preview-meta', text: meta }));
+        }
+        if (alreadySaved) {
+            content.append(element('span', { className: 'wcc-import-preview-badge', text: 'Already in plan' }));
+            item.append(content);
+            if (sessionLink) {
+                item.append(sessionLink);
+            }
+            return item;
+        }
+
+        const label = element('label', { className: 'wcc-import-preview-choice' });
+        const checkbox = element('input', {
+            type: 'checkbox',
+            value: String(sessionId),
+            'aria-label': 'Import ' + (session.title || 'session'),
+        });
+
+        checkbox.checked = Boolean(options.selected);
+        checkbox.disabled = state.importingSharedSchedule || !sessionId;
+        checkbox.addEventListener('change', function () {
+            toggleImportScheduleSession(sessionId, checkbox.checked);
+            updateImportScheduleDialog();
+        });
+
+        label.append(checkbox, content);
+        item.append(label);
+        if (sessionLink) {
+            item.append(sessionLink);
+        }
+
+        return item;
+    }
+
+    function createImportScheduleSessionLink(session) {
+        const url = session && session.url ? session.url : '';
+
+        if (!url) {
+            return null;
+        }
+
+        const label = 'Open WordCamp session page for ' + (session.title || 'session');
+        const link = element('a', {
+            className: 'wcc-import-preview-link',
+            href: url,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            'aria-label': label,
+            title: 'Open session page',
+        });
+
+        link.append(element('span', {
+            className: 'dashicons dashicons-external',
+            'aria-hidden': 'true',
+        }));
+
+        return link;
+    }
+
+    function getImportScheduleSessionMeta(session) {
+        const parts = [];
+        const timeZone = getSelectedTimezone();
+
+        if (session.start) {
+            parts.push(formatDate(session.start, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            }, timeZone));
+        }
+        if (Array.isArray(session.track_names) && session.track_names.length) {
+            parts.push(session.track_names.join(', '));
+        }
+        if (Array.isArray(session.speaker_names) && session.speaker_names.length) {
+            parts.push(session.speaker_names.join(', '));
+        }
+
+        return parts.join(' - ');
     }
 
     function getImportScheduleSessionIds() {
@@ -1695,30 +1971,75 @@
         return parseWccSessionIds(nodes.importScheduleDialog.dataset.wccSessionIds || '');
     }
 
+    function getImportScheduleSelectedSessionIds() {
+        if (!nodes.importScheduleDialog) {
+            return new Set();
+        }
+
+        return new Set(parseWccSessionIds(nodes.importScheduleDialog.dataset.wccSelectedSessionIds || ''));
+    }
+
+    function setImportScheduleSelectedSessionIds(ids) {
+        if (!nodes.importScheduleDialog) {
+            return;
+        }
+
+        nodes.importScheduleDialog.dataset.wccSelectedSessionIds = ids.filter(Boolean).join('.');
+    }
+
+    function toggleImportScheduleSession(sessionId, selected) {
+        const selectedIds = getImportScheduleSelectedSessionIds();
+        const id = Number(sessionId || 0);
+
+        if (!id) {
+            return;
+        }
+
+        if (selected) {
+            selectedIds.add(id);
+        } else {
+            selectedIds.delete(id);
+        }
+
+        setImportScheduleSelectedSessionIds(Array.from(selectedIds));
+    }
+
+    function getSelectableImportSessions(sessions, savedIds, selectedIds) {
+        return sessions.filter(function (session) {
+            const id = Number(session && session.id || 0);
+
+            return id && selectedIds.has(id) && !savedIds.has(id);
+        });
+    }
+
     async function importSharedSchedule() {
         if (state.importingSharedSchedule) {
             return;
         }
 
-        const ids = getImportScheduleSessionIds();
+        const preview = getImportSchedulePreview();
+        const ids = preview.ids;
         if (!ids.length || !state.schedule || !Array.isArray(state.schedule.sessions)) {
             closeImportScheduleDialog();
             return;
         }
 
         const savedIds = getSavedSessionIds();
-        const sessionsById = new Map();
-        state.schedule.sessions.forEach(function (session) {
-            sessionsById.set(Number(session.id || 0), session);
-        });
-        const sessionsToImport = ids.filter(function (id) {
-            return !savedIds.has(id) && sessionsById.has(id);
-        }).map(function (id) {
-            return sessionsById.get(id);
-        });
+        const selectedIds = getImportScheduleSelectedSessionIds();
+        const sessionsToImport = getSelectableImportSessions(preview.sessions, savedIds, selectedIds);
 
         if (!sessionsToImport.length) {
-            state.alert = { type: 'notice', message: 'The shared sessions are already in your plan or are not available in this schedule.' };
+            state.alert = {
+                type: 'notice',
+                message: 'No new shared sessions are selected to add.',
+            };
+            closeImportScheduleDialog();
+            render();
+            return;
+        }
+
+        if (!preview.sessions.length) {
+            state.alert = { type: 'notice', message: 'The shared sessions are not available in this schedule.' };
             closeImportScheduleDialog();
             render();
             return;
@@ -1734,7 +2055,11 @@
                 addSavedSessionPost(normalizeSavedSessionPost(createdPost, session));
             }
 
-            state.alert = { type: 'notice', message: sessionsToImport.length + ' shared session' + (sessionsToImport.length === 1 ? '' : 's') + ' added to your plan.' };
+            state.alert = {
+                type: 'notice',
+                message: sessionsToImport.length + ' shared session' + (sessionsToImport.length === 1 ? '' : 's') + ' added to your plan.',
+            };
+            clearRequestedWccValueFromUrl();
             closeImportScheduleDialog();
         } catch (error) {
             state.alert = getErrorAlert(error);
@@ -4963,16 +5288,35 @@
 
     function getRenderableEvents() {
         const events = state.events.slice();
-        const selectedPlan = getSelectedPlan();
-        const selectedEvent = selectedPlan && selectedPlan.event ? selectedPlan.event : null;
+        const plannedEvents = getPlannedEvents();
 
-        if (selectedEvent && selectedEvent.event_url && !events.some(function (event) {
-            return event.event_url === selectedEvent.event_url;
-        })) {
-            events.unshift(selectedEvent);
-        }
+        plannedEvents.forEach(function (plannedEvent) {
+            if (plannedEvent && plannedEvent.event_url && !events.some(function (event) {
+                return event.event_url === plannedEvent.event_url;
+            })) {
+                events.unshift(plannedEvent);
+            }
+        });
 
         return events;
+    }
+
+    function getPlannedEvents() {
+        const events = [];
+        const plans = state.plan && state.plan.plans && typeof state.plan.plans === 'object' ? state.plan.plans : {};
+
+        Object.keys(plans).forEach(function (eventUrl) {
+            const plan = plans[eventUrl] && typeof plans[eventUrl] === 'object' ? plans[eventUrl] : null;
+            const event = plan && plan.event ? plan.event : null;
+
+            if (event && event.event_url && !events.some(function (existing) {
+                return existing.event_url === event.event_url;
+            })) {
+                events.push(event);
+            }
+        });
+
+        return events.sort(compareEvents);
     }
 
     function getAttendingEvents() {
@@ -5067,6 +5411,24 @@
 
     function getRequestedWccValue() {
         return (new URLSearchParams(window.location.search).get('wcc1') || '').trim();
+    }
+
+    function clearRequestedWccValueFromUrl() {
+        if (!window.history || typeof window.history.replaceState !== 'function') {
+            return;
+        }
+
+        try {
+            const url = new URL(window.location.href);
+            if (!url.searchParams.has('wcc1')) {
+                return;
+            }
+
+            url.searchParams.delete('wcc1');
+            window.history.replaceState(window.history.state, document.title, url.pathname + url.search + url.hash);
+        } catch (error) {
+            // Keeping the URL unchanged is safer than interrupting a completed import.
+        }
     }
 
     function parseWccParameter(rawValue) {
@@ -5261,10 +5623,17 @@
         return base.replace(/\/?$/, '/') + encodeURIComponent(slug) + '/';
     }
 
-    function getWccPlanUrl(rawWccValue) {
-        const base = config.planBaseUrl || config.planUrl || (config.appUrl ? config.appUrl.replace(/\/?$/, '/plan-your/') : '/wordcamp-companion/plan-your/');
+    function getCompanionImportUrl(rawWccValue) {
+        const base = getCompanionUrl();
 
-        return base.replace(/\/?$/, '/') + 'schedule/?wcc1=' + encodeURIComponent(rawWccValue);
+        try {
+            const url = new URL(base, window.location.href);
+            url.searchParams.set('wcc1', rawWccValue);
+            return url.toString();
+        } catch (error) {
+            const separator = base.indexOf('?') === -1 ? '?' : '&';
+            return base.replace(/\/?$/, '/') + separator + 'wcc1=' + encodeURIComponent(rawWccValue);
+        }
     }
 
     function getCompanionUrl() {

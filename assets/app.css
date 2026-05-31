@@ -495,6 +495,19 @@ body.has-wcc-modal {
     max-width: 100%;
 }
 
+.wcc-share-note {
+    margin: -4px 0 0;
+    color: var(--wcc-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.wcc-share-note a {
+    color: var(--wcc-primary);
+    font-weight: 700;
+}
+
 .wcc-import-panel {
     justify-items: stretch;
 }
@@ -505,8 +518,96 @@ body.has-wcc-modal {
     line-height: 1.45;
 }
 
+.wcc-import-preview {
+    display: grid;
+    gap: 8px;
+    max-height: min(42vh, 320px);
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.wcc-import-preview-item,
+.wcc-import-preview-empty {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--wcc-surface), var(--wcc-muted) 4%);
+}
+
+.wcc-import-preview-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 10px;
+    align-items: start;
+}
+
+.wcc-import-preview-item strong {
+    line-height: 1.25;
+}
+
+.wcc-import-preview-item.is-saved {
+    padding-left: 36px;
+}
+
+.wcc-import-preview-choice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    cursor: pointer;
+}
+
+.wcc-import-preview-choice input {
+    margin-top: 2px;
+}
+
+.wcc-import-preview-content {
+    display: grid;
+    gap: 4px;
+}
+
+.wcc-import-preview-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    color: var(--wcc-muted);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    text-decoration: none;
+}
+
+.wcc-import-preview-link:hover,
+.wcc-import-preview-link:focus-visible {
+    color: var(--wcc-primary);
+    background: color-mix(in srgb, var(--wcc-primary), transparent 92%);
+    border-color: color-mix(in srgb, var(--wcc-primary), transparent 70%);
+}
+
+.wcc-import-preview-meta,
+.wcc-import-preview-empty {
+    color: var(--wcc-muted);
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.wcc-import-preview-badge {
+    justify-self: start;
+    padding: 2px 7px;
+    color: var(--wcc-primary);
+    border: 1px solid color-mix(in srgb, var(--wcc-primary), transparent 70%);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
 .wcc-modal-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
 }

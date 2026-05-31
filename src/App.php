@@ -92,14 +92,7 @@ class App extends BaseApp {
 
         $wcc_share = $this->get_wcc_query_parameter();
         if ( '' !== $wcc_share ) {
-            wp_safe_redirect(
-                add_query_arg(
-                    'wcc1',
-                    $wcc_share,
-                    home_url( '/' . $this->get_url_path() . '/plan-your/schedule/' )
-                )
-            );
-            exit;
+            return;
         }
 
         $plan = $this->repository->get_plan( get_current_user_id() );
