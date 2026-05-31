@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_QR_TARGET_URL="https://my.wordpress.net/?i=wordcamp-companion"
+DEFAULT_QR_TARGET_URL="https://my.wordpress.net/?myapps-i=wordcamp-companion"
 QR_TARGET_URL="${1:-${QR_TARGET_URL:-${DEFAULT_QR_TARGET_URL}}}"
 QR_OUTPUT="${ROOT_DIR}/assets/share-qr.png"
 

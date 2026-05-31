@@ -184,7 +184,7 @@ class App extends BaseApp {
             'notesUrl'                 => home_url( '/' . $this->get_url_path() . '/notes/' ),
             'planBaseUrl'              => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
             'planUrl'                  => home_url( '/' . $this->get_url_path() . '/plan-your/' ),
-            'shareUrl'                 => 'https://my.wordpress.net/?i=wordcamp-companion',
+            'shareUrl'                 => 'https://my.wordpress.net/?myapps-i=wordcamp-companion',
             'routeWordcampSlug'        => sanitize_title( (string) get_query_var( 'wordcamp' ) ),
             'assetVersion'             => $asset_version,
             'timeFormat'               => get_option( 'time_format' ),

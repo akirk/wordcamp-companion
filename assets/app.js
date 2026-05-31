@@ -1,5 +1,5 @@
 (function () {
-    const SCRIPT_BUILD = '20260530.4';
+    const SCRIPT_BUILD = '20260531.1';
     const SUBSTANTIAL_OVERLAP_SECONDS = 20 * 60;
     const TRACK_CHANGE_LEAD_SECONDS = 10 * 60;
     const DEBUG_TIME_SLIDER_RANGE_MINUTES = 180;
@@ -1527,7 +1527,7 @@
     }
 
     function getShareUrlForMode(mode) {
-        const shareUrl = config.shareUrl || 'https://my.wordpress.net/?i=wordcamp-companion';
+        const shareUrl = config.shareUrl || 'https://my.wordpress.net/?myapps-i=wordcamp-companion';
 
         if (mode !== 'schedule') {
             return shareUrl;
