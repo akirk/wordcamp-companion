@@ -151,6 +151,7 @@ class App extends BaseApp {
 
         $script_assets = [
             'wordcamp-companion-state'           => 'assets/js/state.js',
+            'wordcamp-companion-i18n'            => 'assets/js/i18n.js',
             'wordcamp-companion-dom'             => 'assets/js/dom.js',
             'wordcamp-companion-api'             => 'assets/js/api.js',
             'wordcamp-companion-qr'              => 'assets/js/qr.js',
