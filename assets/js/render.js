@@ -1802,7 +1802,7 @@
     function getRenderableCompanionSteps(visibleSteps) {
         const defaultLimit = 4;
         const sessionIndex = visibleSteps.findIndex(function (step) {
-            return step.type === 'session' || step.type === 'choice';
+            return step.type === 'session';
         });
         let limit = Math.min(defaultLimit, visibleSteps.length);
 
@@ -2126,7 +2126,6 @@
 
     function getCompanionStepStaticSignature(step) {
         const session = step.session || {};
-        const alternatives = Array.isArray(step.alternatives) ? step.alternatives : [];
         const candidates = Array.isArray(step.candidates) ? step.candidates : [];
         const mapLinks = Array.isArray(step.mapLinks) ? step.mapLinks : [];
 
@@ -2141,9 +2140,9 @@
             step.detail || '',
             step.meta || '',
             step.warning || '',
+            step.note || '',
             step.final ? '1' : '0',
             getCompanionSessionStaticSignature(session),
-            alternatives.map(getCompanionSessionStaticSignature).join(','),
             candidates.map(getCompanionSessionStaticSignature).join(','),
             mapLinks.map(function (link) {
                 return [link.label || '', link.url || ''];
@@ -2282,10 +2281,6 @@
             body.append(speakers);
         }
 
-        if (step.type === 'choice') {
-            body.append(renderCompanionChoices(step.alternatives || [], timeZone));
-        }
-
         if (step.type === 'gap') {
             gapPicker = renderGapPicker(step);
             body.append(gapPicker);
@@ -2301,6 +2296,10 @@
             if (notes) {
                 body.append(notes);
             }
+        }
+
+        if (step.note) {
+            body.append(element('span', { className: 'wcc-overlap-badge wcc-companion-overlap-note', text: step.note }));
         }
 
         const marker = renderCompanionMarker(step, gapPicker);
@@ -2379,40 +2378,6 @@
         }
 
         return Math.max(0, Math.min(100, Math.round(((now - start) / (end - start)) * 1000) / 10));
-    }
-
-    function renderCompanionChoices(alternatives, timeZone) {
-        const wrapper = element('div', { className: 'wcc-choice-list' });
-
-        alternatives.forEach(function (session) {
-            const item = element('article', { className: 'wcc-choice-item' });
-            const heading = element('div', { className: 'wcc-choice-heading' });
-            const meta = [getPrimaryTrack(session), formatSessionTime(session, timeZone)].filter(Boolean);
-
-            heading.append(
-                element('strong', { text: session.title || 'Untitled session' }),
-                renderCompanionRemoveButton(session)
-            );
-            item.append(heading);
-
-            if (meta.length) {
-                item.append(element('span', { text: meta.join(' / ') }));
-            }
-
-            const speakers = renderSessionSpeakers(session, 'wcc-session-speakers wcc-choice-speakers');
-            if (speakers) {
-                item.append(speakers);
-            }
-
-            const notes = renderSessionNotes(session, { compact: true });
-            if (notes) {
-                item.append(notes);
-            }
-
-            wrapper.append(item);
-        });
-
-        return wrapper;
     }
 
     function renderSessionSpeakers(session, className) {
@@ -2937,7 +2902,6 @@
         applyCompanionStepProgress: applyCompanionStepProgress,
         renderCompanionMarker: renderCompanionMarker,
         getCompanionStepProgress: getCompanionStepProgress,
-        renderCompanionChoices: renderCompanionChoices,
         renderSessionSpeakers: renderSessionSpeakers,
         renderCompanionRemoveButton: renderCompanionRemoveButton,
         renderMapLinks: renderMapLinks,
