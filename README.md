@@ -79,6 +79,7 @@ The companion view can also display links to Google Maps and OpenStreetMap for v
 3. Take notes
 
 https://github.com/user-attachments/assets/9a955b34-9d07-482a-a889-a43c07e64767
+
 4. Timeline updates throughout the day.
 
 ## Changelog
