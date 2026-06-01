@@ -83,7 +83,7 @@
                 return 'Be there in ' + formatHumanDuration(end - now);
             }
 
-            if (step.type === 'session' || step.type === 'choice') {
+            if (step.type === 'session') {
                 return 'Ends in ' + formatRelativeDuration(end - now);
             }
 
@@ -116,7 +116,7 @@
             return formatRelativeDuration(duration) + ' break';
         }
 
-        if ((step.type === 'session' || step.type === 'choice') && duration) {
+        if (step.type === 'session' && duration) {
             return 'Duration: ' + formatDuration(duration);
         }
 

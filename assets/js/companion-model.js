@@ -292,32 +292,61 @@
                     return;
                 }
 
-                if (block.type === 'choice') {
-                    const choiceWindow = getTrackChangeWindow(block.start, occupiedUntil);
+                if (block.type === 'overlap') {
+                    const overlapNote = getChoiceOverlapNote(block.sessions);
 
-                    if (choiceWindow) {
+                    block.sessions.forEach(function (overlapSession, overlapIndex) {
+                        const overlapTrack = getPrimaryTrack(overlapSession);
+                        const overlapEnd = overlapSession.end ||
+                            overlapSession.start + Math.max(0, Number(overlapSession.duration || 0));
+
+                        if (overlapTrack && overlapTrack !== currentTrack) {
+                            if (overlapIndex === 0) {
+                                const trackWindow = getTrackChangeWindow(overlapSession.start, occupiedUntil);
+
+                                if (trackWindow) {
+                                    steps.push({
+                                        type: 'track',
+                                        dayKey: group.key,
+                                        start: trackWindow.start,
+                                        end: trackWindow.end,
+                                        title: currentTrack ? 'Switch to ' + overlapTrack : 'Go to ' + overlapTrack,
+                                        detail: '',
+                                        meta: '',
+                                    });
+                                }
+                            } else {
+                                // Overlapping sessions share a slot, so there is no real gap to
+                                // place a lead-in window. Emit an inline marker that sorts like a
+                                // session (see getStepSortWeight) so it lands between the two cards.
+                                steps.push({
+                                    type: 'track',
+                                    dayKey: group.key,
+                                    start: overlapSession.start,
+                                    end: overlapSession.start,
+                                    title: 'Switch to ' + overlapTrack,
+                                    detail: '',
+                                    meta: '',
+                                    inline: true,
+                                });
+                            }
+                            currentTrack = overlapTrack;
+                        }
+
                         steps.push({
-                            type: 'track',
+                            type: 'session',
                             dayKey: group.key,
-                            start: choiceWindow.start,
-                            end: choiceWindow.end,
-                            title: 'Choose where to go',
-                            detail: getChoiceTrackSummary(block.sessions),
-                            meta: '',
+                            start: overlapSession.start,
+                            end: overlapEnd,
+                            title: overlapSession.title || 'Untitled session',
+                            detail: overlapTrack,
+                            meta: formatSessionTime(overlapSession, timeZone),
+                            session: overlapSession,
+                            note: overlapIndex === 0 ? overlapNote : '',
                         });
-                    }
-                    steps.push({
-                        type: 'choice',
-                        dayKey: group.key,
-                        start: block.start,
-                        end: block.end,
-                        title: 'Choose one session',
-                        detail: '',
-                        meta: formatSessionTime(block, timeZone),
-                        alternatives: block.sessions,
+                        occupiedUntil = Math.max(occupiedUntil, overlapEnd || overlapSession.start || 0);
                     });
                     currentTrack = '';
-                    occupiedUntil = Math.max(occupiedUntil, block.end || block.start || 0);
                     return;
                 }
 
@@ -459,7 +488,7 @@
             }
 
             return {
-                type: 'choice',
+                type: 'overlap',
                 start: block.start,
                 end: block.end,
                 sessions: block.sessions,
@@ -473,16 +502,18 @@
         });
     }
 
-    function getChoiceTrackSummary(sessions) {
-        const tracks = sessions.map(getPrimaryTrack).filter(Boolean).filter(function (track, index, list) {
-            return list.indexOf(track) === index;
-        });
-
-        if (!tracks.length) {
-            return 'Pick one saved option.';
+    function getChoiceOverlapNote(sessions) {
+        if (!sessions || sessions.length < 2) {
+            return '';
         }
 
-        return 'Pick one: ' + tracks.join(' / ');
+        const overlapSeconds = sessionsOverlapSeconds(sessions[0], sessions[1]);
+
+        if (!overlapSeconds) {
+            return __('Overlaps with next session');
+        }
+
+        return sprintf(__('Overlaps with next session by %s'), formatDuration(overlapSeconds));
     }
 
     function getTrackChangeWindow(targetStart, occupiedUntil) {
@@ -557,7 +588,9 @@
         }
 
         if (step.type === 'track') {
-            return 1;
+            // Inline track markers sit between two overlapping sessions that share a
+            // start time, so they must sort alongside sessions (not ahead of them).
+            return step.inline ? 2 : 1;
         }
 
         return 2;
@@ -568,7 +601,7 @@
         formatUpcomingStepLabel: formatUpcomingStepLabel,
         buildCompanionTimeline: buildCompanionTimeline,
         getCompanionSessionBlocks: getCompanionSessionBlocks,
-        getChoiceTrackSummary: getChoiceTrackSummary,
+        getChoiceOverlapNote: getChoiceOverlapNote,
         getTrackChangeWindow: getTrackChangeWindow,
         getSessionOverlapWarning: getSessionOverlapWarning,
         getStepSortWeight: getStepSortWeight
