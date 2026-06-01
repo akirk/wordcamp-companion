@@ -11,6 +11,15 @@
     function isCompanionStepCurrent() {
         return WCC.isCompanionStepCurrent.apply(WCC, arguments);
     }
+    function __() {
+        return WCC.__.apply(WCC, arguments);
+    }
+    function _n() {
+        return WCC._n.apply(WCC, arguments);
+    }
+    function sprintf() {
+        return WCC.sprintf.apply(WCC, arguments);
+    }
     function formatTimeOnly() {
         return WCC.formatTimeOnly.apply(WCC, arguments);
     }
@@ -523,14 +532,23 @@
             return Math.max(longest, sessionsOverlapSeconds(session, candidate));
         }, 0);
         const names = overlaps.slice(0, 2).map(function (candidate) {
-            return candidate.title || 'another saved session';
+            return candidate.title || __('another saved session');
         });
 
         if (overlaps.length > 2) {
-            names.push((overlaps.length - 2) + ' more');
+            names.push(sprintf(__('%d more'), overlaps.length - 2));
         }
 
-        return 'Heads up: ' + names.join(', ') + ' ' + (overlaps.length === 1 ? 'runs' : 'run') + ' until ' + formatSlotTime(latestEnd, timeZone) + ', so there is a ' + formatDuration(longestOverlap) + ' overlap.';
+        return sprintf(
+            _n(
+                'Heads up: %1$s runs until %2$s, so there is a %3$s overlap.',
+                'Heads up: %1$s run until %2$s, so there is a %3$s overlap.',
+                overlaps.length
+            ),
+            names.join(', '),
+            formatSlotTime(latestEnd, timeZone),
+            formatDuration(longestOverlap)
+        );
     }
 
     function getStepSortWeight(step) {

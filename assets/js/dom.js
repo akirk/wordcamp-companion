@@ -11,6 +11,15 @@
     function api() {
         return WCC.api.apply(WCC, arguments);
     }
+    function __() {
+        return WCC.__.apply(WCC, arguments);
+    }
+    function _n() {
+        return WCC._n.apply(WCC, arguments);
+    }
+    function sprintf() {
+        return WCC.sprintf.apply(WCC, arguments);
+    }
     function buildCompanionTimeline() {
         return WCC.buildCompanionTimeline.apply(WCC, arguments);
     }
@@ -141,14 +150,18 @@
         const remaining = minutes % 60;
 
         if (hours && remaining) {
-            return hours + 'hr' + (hours === 1 ? '' : 's') + ' ' + remaining + 'm';
+            return sprintf(
+                _n('%1$dhr %2$dm', '%1$dhrs %2$dm', hours),
+                hours,
+                remaining
+            );
         }
 
         if (hours) {
-            return hours + 'hr' + (hours === 1 ? '' : 's');
+            return sprintf(_n('%dhr', '%dhrs', hours), hours);
         }
 
-        return Math.max(1, minutes) + 'm';
+        return sprintf(__('%dm'), Math.max(1, minutes));
     }
 
     function formatCompanionStepTime(step, timeZone) {
@@ -205,7 +218,7 @@
             return hours + 'hr';
         }
 
-        return totalMinutes + 'min' + (totalMinutes === 1 ? '' : 's');
+        return sprintf(_n('%dmin', '%dmins', totalMinutes), totalMinutes);
     }
 
     function formatDurationWords(seconds) {
@@ -218,15 +231,15 @@
         const parts = [];
 
         if (days) {
-            return days + ' day' + (days === 1 ? '' : 's');
+            return sprintf(_n('%d day', '%d days', days), days);
         }
 
         if (hours) {
-            parts.push(hours + ' hr' + (hours === 1 ? '' : 's'));
+            parts.push(sprintf(_n('%d hr', '%d hrs', hours), hours));
         }
 
         if (minutes || !parts.length) {
-            parts.push(minutes + ' min' + (minutes === 1 ? '' : 's'));
+            parts.push(sprintf(_n('%d min', '%d mins', minutes), minutes));
         }
 
         return parts.join(' ');

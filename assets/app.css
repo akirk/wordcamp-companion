@@ -635,6 +635,10 @@ body.has-wcc-modal {
     border-left-color: var(--wcc-danger);
 }
 
+.wcc-alert.is-success {
+    border-left-color: var(--wcc-success);
+}
+
 .wcc-alert-message {
     display: block;
 }

@@ -32,6 +32,15 @@
     function getErrorAlert() {
         return WCC.getErrorAlert.apply(WCC, arguments);
     }
+    function __() {
+        return WCC.__.apply(WCC, arguments);
+    }
+    function _n() {
+        return WCC._n.apply(WCC, arguments);
+    }
+    function sprintf() {
+        return WCC.sprintf.apply(WCC, arguments);
+    }
     function createQrSvg() {
         return WCC.createQrSvg.apply(WCC, arguments);
     }
@@ -283,8 +292,11 @@
             return;
         }
 
+        const alertModifier = state.alert.type === 'error'
+            ? ' is-error'
+            : (state.alert.type === 'success' ? ' is-success' : '');
         const alert = element('div', {
-            className: 'wcc-alert' + (state.alert.type === 'error' ? ' is-error' : ''),
+            className: 'wcc-alert' + alertModifier,
         });
         alert.append(element('span', { className: 'wcc-alert-message', text: state.alert.message }));
 
@@ -346,7 +358,7 @@
 
         const summary = [savedIds.size + ' saved'];
         if (conflictCount > 0) {
-            summary.push(conflictCount + ' alternative' + (conflictCount === 1 ? '' : 's'));
+            summary.push(sprintf(_n('%d alternative', '%d alternatives', conflictCount), conflictCount));
         }
         nodes.planSummary.textContent = summary.join(' / ');
     }
@@ -815,17 +827,36 @@
     function updateImportScheduleDialog() {
         const preview = getImportSchedulePreview();
         const event = getSelectedEvent();
-        const eventTitle = event ? getEventTitle(event) : 'this WordCamp';
+        const eventTitle = event ? getEventTitle(event) : __('this WordCamp');
         const savedIds = getSavedSessionIds();
         const selectedIds = getImportScheduleSelectedSessionIds();
         const selectedImportCount = getSelectableImportSessions(preview.sessions, savedIds, selectedIds).length;
         const missingCount = preview.missingIds.length;
-        const foundText = preview.sessions.length + ' of ' + preview.ids.length + ' shared session' + (preview.ids.length === 1 ? '' : 's');
+        const foundText = sprintf(
+            _n('%1$d of %2$d shared session', '%1$d of %2$d shared sessions', preview.ids.length),
+            preview.sessions.length,
+            preview.ids.length
+        );
 
-        nodes.importScheduleText.textContent = foundText + ' found for ' + eventTitle + '. Select the sessions to add to your plan' + (missingCount ? '. ' + missingCount + ' shared session' + (missingCount === 1 ? ' was' : 's were') + ' not found in the published schedule.' : '.');
+        let importText = sprintf(
+            __('%1$s found for %2$s. Select the sessions to add to your plan.'),
+            foundText,
+            eventTitle
+        );
+        if (missingCount) {
+            importText += ' ' + sprintf(
+                _n(
+                    '%d shared session was not found in the published schedule.',
+                    '%d shared sessions were not found in the published schedule.',
+                    missingCount
+                ),
+                missingCount
+            );
+        }
+        nodes.importScheduleText.textContent = importText;
         renderImportSchedulePreview(preview, savedIds, selectedIds);
         nodes.importScheduleImport.disabled = state.importingSharedSchedule || !selectedImportCount;
-        nodes.importScheduleImport.textContent = state.importingSharedSchedule ? 'Adding...' : 'Add selected';
+        nodes.importScheduleImport.textContent = state.importingSharedSchedule ? __('Adding...') : __('Add selected');
         nodes.importScheduleSkip.disabled = state.importingSharedSchedule;
     }
 
@@ -893,7 +924,14 @@
         if (preview.missingIds.length) {
             nodes.importSchedulePreview.append(element('li', {
                 className: 'wcc-import-preview-empty',
-                text: preview.missingIds.length + ' shared session' + (preview.missingIds.length === 1 ? '' : 's') + ' could not be previewed.',
+                text: sprintf(
+                    _n(
+                        '%d shared session could not be previewed.',
+                        '%d shared sessions could not be previewed.',
+                        preview.missingIds.length
+                    ),
+                    preview.missingIds.length
+                ),
             }));
         }
     }
@@ -1085,8 +1123,15 @@
             }
 
             state.alert = {
-                type: 'notice',
-                message: sessionsToImport.length + ' shared session' + (sessionsToImport.length === 1 ? '' : 's') + ' added to your plan.',
+                type: 'success',
+                message: sprintf(
+                    _n(
+                        '%d shared session added to your plan.',
+                        '%d shared sessions added to your plan.',
+                        sessionsToImport.length
+                    ),
+                    sessionsToImport.length
+                ),
             };
             clearRequestedWccValueFromUrl();
             closeImportScheduleDialog();
@@ -1337,7 +1382,7 @@
                 element('h2', { text: group.label }),
                 element('span', {
                     className: 'wcc-day-count',
-                    text: group.sessions.length + ' session' + (group.sessions.length === 1 ? '' : 's'),
+                    text: sprintf(_n('%d session', '%d sessions', group.sessions.length), group.sessions.length),
                 })
             );
 
@@ -1433,7 +1478,7 @@
                 element('h2', { text: group.label }),
                 element('span', {
                     className: 'wcc-day-count',
-                    text: group.sessions.length + ' session' + (group.sessions.length === 1 ? '' : 's'),
+                    text: sprintf(_n('%d session', '%d sessions', group.sessions.length), group.sessions.length),
                 })
             );
 
@@ -1559,7 +1604,7 @@
                 element('h2', { text: group.label }),
                 element('span', {
                     className: 'wcc-day-count',
-                    text: tracks.length + ' track' + (tracks.length === 1 ? '' : 's'),
+                    text: sprintf(_n('%d track', '%d tracks', tracks.length), tracks.length),
                 })
             );
 
