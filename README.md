@@ -39,10 +39,6 @@ Features include:
 
 ## Frequently Asked Questions
 
-### Does this require a WordCamp.org account?
-
-No. The plugin reads public schedule data from WordCamp sites and stores your selected sessions in your own WordPress site.
-
 ### Where are saved sessions stored?
 
 Saved sessions are stored as `wcc_session` posts authored by the current WordPress user. The selected WordCamp is stored as a term in the `wcc_wordcamp` taxonomy.
@@ -72,9 +68,18 @@ The companion view can also display links to Google Maps and OpenStreetMap for v
 
 ## Screenshots
 
+<img width="982" height="1562" alt="wordcamp-companion-timeline" src="https://github.com/user-attachments/assets/40e8e549-725e-4746-959a-c549f1d7c141" />
+
 1. Companion timeline with arrival, track changes, saved sessions, and day endings.
-2. Plan your day schedule with parallel tracks as columns.
-3. Session notes page with Markdown export.
+
+<img width="980" height="1566" alt="wordcamp-companion-add-session" src="https://github.com/user-attachments/assets/3839a83c-3663-4cf8-9dfc-2100b53942a0" />
+2. Add sessions to your day
+
+<img width="980" height="1556" alt="wordcamp-companion-add-notes" src="https://github.com/user-attachments/assets/ff5d488c-ebba-4cba-8288-2899900c3c63" />
+3. Take notes
+
+https://github.com/user-attachments/assets/9a955b34-9d07-482a-a889-a43c07e64767
+4. Timeline updates throughout the day.
 
 ## Changelog
 
