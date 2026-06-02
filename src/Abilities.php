@@ -346,6 +346,7 @@ class Abilities {
         $track = isset( $input['track'] ) ? strtolower( sanitize_text_field( (string) $input['track'] ) ) : '';
         $category = isset( $input['category'] ) ? strtolower( sanitize_text_field( (string) $input['category'] ) ) : '';
         $unsaved_only = array_key_exists( 'unsaved_only', $input ) ? rest_sanitize_boolean( $input['unsaved_only'] ) : true;
+        $exclude_breaks = ! empty( $input['exclude_breaks'] );
         $max_results = isset( $input['max_results'] ) ? absint( $input['max_results'] ) : 20;
         $max_results = max( 1, min( 100, $max_results ) );
         $timezone = isset( $schedule['timezone'] ) ? sanitize_text_field( (string) $schedule['timezone'] ) : '';
@@ -359,6 +360,10 @@ class Abilities {
 
             $session_id = absint( $session['id'] );
             if ( $unsaved_only && in_array( $session_id, $saved_ids, true ) ) {
+                continue;
+            }
+
+            if ( $exclude_breaks && $this->is_break_session( $session ) ) {
                 continue;
             }
 
@@ -404,12 +409,13 @@ class Abilities {
             'site_name'      => $schedule['site_name'] ?? '',
             'timezone'       => $timezone,
             'filters'        => [
-                'topics'       => $topics,
-                'day_key'      => $day_key,
-                'track'        => $track,
-                'category'     => $category,
-                'unsaved_only' => $unsaved_only,
-                'max_results'  => $max_results,
+                'topics'         => $topics,
+                'day_key'        => $day_key,
+                'track'          => $track,
+                'category'       => $category,
+                'unsaved_only'   => $unsaved_only,
+                'exclude_breaks' => $exclude_breaks,
+                'max_results'    => $max_results,
             ],
             'saved_sessions' => $saved_sessions,
             'candidates'     => array_slice( $candidates, 0, $max_results ),
@@ -799,6 +805,37 @@ class Abilities {
         ];
     }
 
+    private function is_break_session( array $session ): bool {
+        $type = isset( $session['type'] ) ? sanitize_key( (string) $session['type'] ) : '';
+        if ( in_array( $type, [ 'break', 'custom' ], true ) ) {
+            return true;
+        }
+
+        $labels = [
+            (string) ( $session['title'] ?? '' ),
+            implode( ' ', isset( $session['category_names'] ) && is_array( $session['category_names'] ) ? $session['category_names'] : [] ),
+        ];
+        $haystack = strtolower( implode( ' ', $labels ) );
+        $break_terms = [
+            'after party',
+            'break',
+            'closing remarks',
+            'coffee',
+            'lunch',
+            'opening remarks',
+            'registration',
+            'social',
+        ];
+
+        foreach ( $break_terms as $term ) {
+            if ( false !== strpos( $haystack, $term ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function get_topic_score( array $session, array $topics ): int {
         if ( empty( $topics ) ) {
             return 0;
@@ -992,6 +1029,11 @@ class Abilities {
                     'type'        => 'boolean',
                     'description' => 'Whether to exclude sessions already saved by the user.',
                     'default'     => true,
+                ],
+                'exclude_breaks' => [
+                    'type'        => 'boolean',
+                    'description' => 'Whether to exclude breaks, meals, registration, social items, and custom non-talk schedule entries.',
+                    'default'     => false,
                 ],
                 'max_results' => [
                     'type'        => 'integer',
