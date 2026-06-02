@@ -2983,13 +2983,6 @@
             return;
         }
 
-        if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'k') {
-            event.preventDefault();
-            insertNoteLinkMarkdown(textarea);
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
-            return;
-        }
-
         if (event.key === 'Enter' && continueNoteList(textarea)) {
             event.preventDefault();
             handleNoteEditorInput(textarea, postId, persistedValue, status);
