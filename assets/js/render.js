@@ -1401,8 +1401,8 @@
         const notedCount = sessions.filter(function (session) {
             return getSessionNotes(session).trim() !== '';
         }).length;
-        const section = element('section', { className: 'wcc-notes-export' });
-        const header = element('div', { className: 'wcc-notes-export-header' });
+        const section = element('details', { className: 'wcc-notes-export' });
+        const summary = element('summary', { className: 'wcc-notes-export-header' });
         const title = element('div', { className: 'wcc-notes-export-title' });
         const actions = element('div', { className: 'wcc-notes-export-actions' });
         const output = element('textarea', {
@@ -1446,9 +1446,10 @@
         });
 
         actions.append(copyButton, downloadButton);
-        header.append(title, actions);
+        summary.append(title);
         section.append(
-            header,
+            summary,
+            actions,
             element('p', {
                 className: 'wcc-notes-export-help',
                 text: 'This read-only preview is built from the individual session notes below. Edit a session note to update the export automatically.',

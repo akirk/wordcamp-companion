@@ -883,6 +883,11 @@ body.has-wcc-modal {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    cursor: pointer;
+}
+
+.wcc-notes-export-header::marker {
+    color: var(--wcc-primary);
 }
 
 .wcc-notes-export-title {
