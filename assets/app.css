@@ -937,7 +937,7 @@ body.has-wcc-modal {
     width: fit-content;
     gap: 2px;
     margin-top: 4px;
-    margin-bottom: -1px;
+    margin-bottom: 0;
     padding: 0 8px;
     position: relative;
     z-index: 1;
@@ -970,8 +970,6 @@ body.has-wcc-modal {
 .wcc-notes-rendered-preview {
     display: grid;
     gap: 8px;
-    max-height: 360px;
-    overflow: auto;
     padding: 12px;
     background: var(--wcc-surface-alt);
     border: 1px solid var(--wcc-border);
