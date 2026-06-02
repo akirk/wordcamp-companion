@@ -230,11 +230,31 @@ class Abilities {
             ]
         );
 
+        wp_register_ability(
+            'wordcamp-companion/remove-sessions',
+            [
+                'label'               => __( 'Remove Sessions From Plan', 'wordcamp-companion' ),
+                'description'         => __( 'Removes confirmed WordCamp sessions from the current user\'s saved schedule by session IDs.', 'wordcamp-companion' ),
+                'category'            => 'wordcamp-companion',
+                'input_schema'        => $this->schema_remove_sessions_input(),
+                'output_schema'       => $this->schema_open_object(),
+                'execute_callback'    => [ $this, 'remove_sessions' ],
+                'permission_callback' => [ $this, 'can_read' ],
+                'meta'                => [
+                    'annotations' => [
+                        'readonly'     => false,
+                        'destructive'  => false,
+                        'instructions' => 'Use only after the user confirms which saved sessions to remove. Resolve titles or short phrases first with get-plan, get-schedule, or get-recommendation-candidates, then pass the confirmed numeric session_ids. This removes only saved plan entries, not the public WordCamp sessions.',
+                    ],
+                ],
+            ]
+        );
+
         $this->abilities_registered = true;
     }
 
     public function register_ability_domain( array $domains ): array {
-        $domains['wordcamp-companion'] = 'wordcamp, wordcamp companion, conference schedule, sessions, talks, tracks, speakers, notes, companion timeline, plan my day, event itinerary, add sessions, save sessions';
+        $domains['wordcamp-companion'] = 'wordcamp, wordcamp companion, conference schedule, sessions, talks, tracks, speakers, notes, companion timeline, plan my day, event itinerary, add sessions, save sessions, remove sessions';
         return $domains;
     }
 
@@ -561,6 +581,99 @@ class Abilities {
 
         if ( ! empty( $unresolved_session_ids ) ) {
             $response['unresolved_session_ids'] = $unresolved_session_ids;
+        }
+
+        if ( ! empty( $failed ) ) {
+            $response['failed'] = $failed;
+        }
+
+        if ( ! empty( $conflicts ) ) {
+            $response['conflicts'] = $conflicts;
+        }
+
+        return $response;
+    }
+
+    public function remove_sessions( $input ) {
+        $input = $this->normalize_input( $input );
+        $requested_session_ids = $this->normalize_session_ids( $input['session_ids'] ?? [] );
+        if ( empty( $requested_session_ids ) ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_session_ids',
+                __( 'Provide one or more saved session_ids to remove.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $plan = $this->repository->get_plan( get_current_user_id() );
+        $event_url = $this->get_event_url_from_input_or_plan( $input, $plan );
+        if ( is_wp_error( $event_url ) ) {
+            return $event_url;
+        }
+
+        $event_plan = $this->get_event_plan( $plan, $event_url );
+        $saved_sessions = $this->get_saved_sessions_for_plan( $event_plan );
+        $saved_by_session_id = [];
+        foreach ( $saved_sessions as $saved_session ) {
+            $session_id = absint( $saved_session['session_id'] ?? 0 );
+            if ( $session_id ) {
+                $saved_by_session_id[ $session_id ] = $saved_session;
+            }
+        }
+
+        $removed = [];
+        $not_saved = [];
+        $failed = [];
+
+        foreach ( $requested_session_ids as $session_id ) {
+            if ( empty( $saved_by_session_id[ $session_id ] ) ) {
+                $not_saved[] = $session_id;
+                continue;
+            }
+
+            $saved_session = $saved_by_session_id[ $session_id ];
+            $post_id = absint( $saved_session['post_id'] ?? 0 );
+            if ( ! $post_id ) {
+                $failed[] = [
+                    'session_id' => $session_id,
+                    'error'      => __( 'Saved session post ID was not found.', 'wordcamp-companion' ),
+                ];
+                continue;
+            }
+
+            $deleted = wp_delete_post( $post_id, true );
+            if ( ! $deleted ) {
+                $failed[] = [
+                    'session_id' => $session_id,
+                    'post_id'    => $post_id,
+                    'error'      => __( 'Saved session could not be deleted.', 'wordcamp-companion' ),
+                ];
+                continue;
+            }
+
+            $removed[] = [
+                'session_id' => $session_id,
+                'post_id'    => $post_id,
+                'title'      => sanitize_text_field( (string) ( $saved_session['title'] ?? '' ) ),
+            ];
+            unset( $saved_by_session_id[ $session_id ] );
+        }
+
+        $remaining_saved_sessions = array_values( $saved_by_session_id );
+        $response = [
+            'event_url' => $event_url,
+            'removed'   => $removed,
+            'summary'   => [
+                'removed_count'        => count( $removed ),
+                'not_saved_count'      => count( $not_saved ),
+                'failed_count'         => count( $failed ),
+                'total_saved_sessions' => count( $remaining_saved_sessions ),
+            ],
+        ];
+        $conflicts = $this->get_conflicts( $remaining_saved_sessions );
+
+        if ( ! empty( $not_saved ) ) {
+            $response['not_saved_session_ids'] = $not_saved;
         }
 
         if ( ! empty( $failed ) ) {
@@ -1345,6 +1458,30 @@ class Abilities {
                     'type'        => 'boolean',
                     'description' => 'Whether to bypass cached schedule data while resolving session IDs.',
                     'default'     => false,
+                ],
+            ],
+            'required'             => [ 'session_ids' ],
+            'additionalProperties' => false,
+        ];
+    }
+
+    private function schema_remove_sessions_input(): array {
+        return [
+            'type'                 => 'object',
+            'properties'           => [
+                'event_url' => [
+                    'type'        => 'string',
+                    'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
+                ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
+                'session_ids' => [
+                    'type'        => 'array',
+                    'description' => 'Numeric saved WordCamp session IDs to remove. Resolve names or short phrases before calling this ability.',
+                    'items'       => [ 'type' => 'integer' ],
+                    'minItems'    => 1,
                 ],
             ],
             'required'             => [ 'session_ids' ],
