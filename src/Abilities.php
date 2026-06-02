@@ -210,11 +210,31 @@ class Abilities {
             ]
         );
 
+        wp_register_ability(
+            'wordcamp-companion/save-sessions',
+            [
+                'label'               => __( 'Save Sessions To Plan', 'wordcamp-companion' ),
+                'description'         => __( 'Adds confirmed WordCamp sessions to the current user\'s saved schedule by session IDs from the WordCamp schedule.', 'wordcamp-companion' ),
+                'category'            => 'wordcamp-companion',
+                'input_schema'        => $this->schema_save_sessions_input(),
+                'output_schema'       => $this->schema_open_object(),
+                'execute_callback'    => [ $this, 'save_sessions' ],
+                'permission_callback' => [ $this, 'can_read' ],
+                'meta'                => [
+                    'annotations' => [
+                        'readonly'     => false,
+                        'destructive'  => false,
+                        'instructions' => 'Use only after the user confirms which sessions to add. Resolve titles or short phrases first with get-schedule or get-recommendation-candidates, then pass the confirmed numeric session_ids. Do not pass titles to this ability.',
+                    ],
+                ],
+            ]
+        );
+
         $this->abilities_registered = true;
     }
 
     public function register_ability_domain( array $domains ): array {
-        $domains['wordcamp-companion'] = 'wordcamp, wordcamp companion, conference schedule, sessions, talks, tracks, speakers, notes, companion timeline, plan my day, event itinerary';
+        $domains['wordcamp-companion'] = 'wordcamp, wordcamp companion, conference schedule, sessions, talks, tracks, speakers, notes, companion timeline, plan my day, event itinerary, add sessions, save sessions';
         return $domains;
     }
 
@@ -434,6 +454,108 @@ class Abilities {
         return $plan;
     }
 
+    public function save_sessions( $input ) {
+        $input = $this->normalize_input( $input );
+        $user_id = get_current_user_id();
+        $requested_session_ids = $this->normalize_session_ids( $input['session_ids'] ?? [] );
+        if ( empty( $requested_session_ids ) ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_session_ids',
+                __( 'Provide one or more session_ids from the WordCamp schedule.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $plan = $this->repository->get_plan( $user_id );
+        $event_url = $this->get_event_url_from_input_or_plan( $input, $plan );
+        if ( is_wp_error( $event_url ) ) {
+            return $event_url;
+        }
+
+        $schedule = $this->api->get_schedule( $event_url, ! empty( $input['refresh'] ) );
+        if ( is_wp_error( $schedule ) ) {
+            return $schedule;
+        }
+
+        $schedule['days'] = $this->get_schedule_days( $schedule );
+        $this->repository->store_schedule_metadata( $event_url, $schedule, $schedule['days'] );
+        $plan = $this->ensure_event_plan( $plan, $event_url, $schedule );
+        if ( is_wp_error( $plan ) ) {
+            return $plan;
+        }
+
+        $event_plan = $this->get_event_plan( $plan, $event_url );
+        $term_id = absint( $event_plan['wordcamp_term_id'] ?? $plan['selected_wordcamp_term_id'] ?? 0 );
+        if ( ! $term_id ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_wordcamp_term',
+                __( 'The selected WordCamp could not be prepared for saving sessions.', 'wordcamp-companion' ),
+                [ 'status' => 500 ]
+            );
+        }
+
+        $saved_sessions = $this->get_saved_sessions_for_plan( $event_plan );
+        $saved_ids = $this->get_saved_session_ids( $saved_sessions );
+        $schedule_sessions_by_id = $this->get_schedule_sessions_by_id( $schedule );
+        $created = [];
+        $already_saved = [];
+        $failed = [];
+        $unresolved_session_ids = [];
+
+        foreach ( $requested_session_ids as $session_id ) {
+            if ( empty( $schedule_sessions_by_id[ $session_id ] ) ) {
+                $unresolved_session_ids[] = $session_id;
+                continue;
+            }
+
+            $session = $schedule_sessions_by_id[ $session_id ];
+            if ( in_array( $session_id, $saved_ids, true ) ) {
+                $already_saved[] = $session;
+                continue;
+            }
+
+            $post_id = wp_insert_post(
+                [
+                    'post_type'   => PlannerRepository::POST_TYPE,
+                    'post_status' => 'publish',
+                    'post_author' => $user_id,
+                    'post_title'  => sanitize_text_field( (string) ( $session['title'] ?? __( 'Untitled session', 'wordcamp-companion' ) ) ),
+                    'meta_input'  => $this->build_saved_session_meta( $event_url, $term_id, $session ),
+                ],
+                true
+            );
+
+            if ( is_wp_error( $post_id ) ) {
+                $failed[] = [
+                    'session' => $session,
+                    'error'   => $post_id->get_error_message(),
+                ];
+                continue;
+            }
+
+            wp_set_object_terms( absint( $post_id ), [ $term_id ], PlannerRepository::TAXONOMY, false );
+            $created[] = [
+                'post_id' => absint( $post_id ),
+                'session' => $session,
+            ];
+            $saved_ids[] = $session_id;
+            $saved_sessions[] = $this->saved_session_from_session( absint( $post_id ), $event_url, $term_id, $session );
+        }
+
+        $fresh_repository = new PlannerRepository( $this->api );
+        $updated_plan = $fresh_repository->get_plan( $user_id );
+
+        return [
+            'event_url'              => $event_url,
+            'saved'                  => $created,
+            'already_saved'          => array_values( $already_saved ),
+            'unresolved_session_ids' => $unresolved_session_ids,
+            'failed'                 => $failed,
+            'conflicts'              => $this->get_conflicts( $saved_sessions ),
+            'plan'                   => $updated_plan,
+        ];
+    }
+
     private function get_event_url_from_input_or_plan( array $input, ?array $plan = null ) {
         $event_url = isset( $input['event_url'] ) ? $this->api->normalize_event_site_url( (string) $input['event_url'] ) : '';
         if ( '' !== $event_url ) {
@@ -522,6 +644,116 @@ class Abilities {
                 )
             )
         );
+    }
+
+    private function normalize_session_ids( $session_ids ): array {
+        if ( is_string( $session_ids ) ) {
+            $session_ids = preg_split( '/\s*,\s*/', $session_ids );
+        }
+
+        if ( ! is_array( $session_ids ) ) {
+            return [];
+        }
+
+        $ids = array_values( array_unique( array_filter( array_map( 'absint', $session_ids ) ) ) );
+        sort( $ids );
+
+        return $ids;
+    }
+
+    private function get_schedule_sessions_by_id( array $schedule ): array {
+        $sessions_by_id = [];
+
+        foreach ( $schedule['sessions'] ?? [] as $session ) {
+            if ( ! is_array( $session ) || empty( $session['id'] ) ) {
+                continue;
+            }
+
+            $sessions_by_id[ absint( $session['id'] ) ] = $session;
+        }
+
+        return $sessions_by_id;
+    }
+
+    private function ensure_event_plan( array $plan, string $event_url, array $schedule ) {
+        $event_plan = $this->get_event_plan( $plan, $event_url );
+        if ( ! empty( $event_plan['wordcamp_term_id'] ) ) {
+            return $plan;
+        }
+
+        $event = $this->api->get_wordcamp_by_event_url( $event_url );
+        if ( is_wp_error( $event ) ) {
+            return $event;
+        }
+
+        if ( ! is_array( $event ) ) {
+            $event = [
+                'event_url' => $event_url,
+                'title'     => ! empty( $schedule['site_name'] ) ? (string) $schedule['site_name'] : $event_url,
+                'timezone'  => ! empty( $schedule['timezone'] ) ? (string) $schedule['timezone'] : '',
+            ];
+        }
+
+        $event['event_url'] = $event_url;
+        if ( ! empty( $schedule['site_name'] ) ) {
+            $event['site_name'] = (string) $schedule['site_name'];
+        }
+        if ( ! empty( $schedule['timezone'] ) ) {
+            $event['schedule_timezone'] = (string) $schedule['timezone'];
+        }
+        if ( ! empty( $schedule['days'] ) && is_array( $schedule['days'] ) ) {
+            $event['schedule_days'] = $schedule['days'];
+        }
+
+        return $this->repository->set_selected_event( get_current_user_id(), $event );
+    }
+
+    private function build_saved_session_meta( string $event_url, int $term_id, array $session ): array {
+        return [
+            'wcc_event_url'        => $event_url,
+            'wcc_wordcamp_term_id' => $term_id,
+            'wcc_session_id'       => absint( $session['id'] ?? 0 ),
+            'wcc_session_url'      => esc_url_raw( (string) ( $session['url'] ?? '' ) ),
+            'wcc_session_start'    => absint( $session['start'] ?? 0 ),
+            'wcc_session_end'      => absint( $session['end'] ?? 0 ),
+            'wcc_session_duration' => absint( $session['duration'] ?? 0 ),
+            'wcc_session_type'     => sanitize_key( (string) ( $session['type'] ?? '' ) ),
+            'wcc_speaker_names'    => $this->list_to_meta( $session['speaker_names'] ?? [] ),
+            'wcc_speaker_urls'     => $this->list_to_meta( $session['speaker_urls'] ?? [] ),
+            'wcc_track_names'      => $this->list_to_meta( $session['track_names'] ?? [] ),
+            'wcc_category_names'   => $this->list_to_meta( $session['category_names'] ?? [] ),
+            'wcc_session_snapshot' => wp_json_encode( $session ),
+            'wcc_session_notes'    => isset( $session['notes'] ) ? sanitize_textarea_field( (string) $session['notes'] ) : '',
+        ];
+    }
+
+    private function saved_session_from_session( int $post_id, string $event_url, int $term_id, array $session ): array {
+        return [
+            'post_id'          => $post_id,
+            'session_id'       => absint( $session['id'] ?? 0 ),
+            'event_url'        => $event_url,
+            'wordcamp_term_id' => $term_id,
+            'title'            => sanitize_text_field( (string) ( $session['title'] ?? '' ) ),
+            'url'              => esc_url_raw( (string) ( $session['url'] ?? '' ) ),
+            'start'            => absint( $session['start'] ?? 0 ),
+            'end'              => absint( $session['end'] ?? 0 ),
+            'duration'         => absint( $session['duration'] ?? 0 ),
+            'type'             => sanitize_key( (string) ( $session['type'] ?? '' ) ),
+            'speaker_names'    => isset( $session['speaker_names'] ) && is_array( $session['speaker_names'] ) ? array_values( $session['speaker_names'] ) : [],
+            'speaker_urls'     => isset( $session['speaker_urls'] ) && is_array( $session['speaker_urls'] ) ? array_values( $session['speaker_urls'] ) : [],
+            'track_names'      => isset( $session['track_names'] ) && is_array( $session['track_names'] ) ? array_values( $session['track_names'] ) : [],
+            'category_names'   => isset( $session['category_names'] ) && is_array( $session['category_names'] ) ? array_values( $session['category_names'] ) : [],
+            'notes'            => isset( $session['notes'] ) ? sanitize_textarea_field( (string) $session['notes'] ) : '',
+            'updated_at'       => time(),
+        ];
+    }
+
+    private function list_to_meta( $values ): string {
+        if ( ! is_array( $values ) ) {
+            return '';
+        }
+
+        return implode( "\n", array_map( 'sanitize_text_field', $values ) );
     }
 
     private function get_schedule_days( array $schedule ): array {
@@ -1070,6 +1302,35 @@ class Abilities {
                 ],
             ],
             'additionalProperties' => true,
+        ];
+    }
+
+    private function schema_save_sessions_input(): array {
+        return [
+            'type'                 => 'object',
+            'properties'           => [
+                'event_url' => [
+                    'type'        => 'string',
+                    'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
+                ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
+                'session_ids' => [
+                    'type'        => 'array',
+                    'description' => 'Numeric WordCamp session IDs to save. Resolve names or short phrases with get-schedule or get-recommendation-candidates before calling this ability.',
+                    'items'       => [ 'type' => 'integer' ],
+                    'minItems'    => 1,
+                ],
+                'refresh' => [
+                    'type'        => 'boolean',
+                    'description' => 'Whether to bypass cached schedule data while resolving session IDs.',
+                    'default'     => false,
+                ],
+            ],
+            'required'             => [ 'session_ids' ],
+            'additionalProperties' => false,
         ];
     }
 
