@@ -926,19 +926,20 @@ body.has-wcc-modal {
 .wcc-notes-export-tabs {
     display: inline-flex;
     width: fit-content;
-    padding: 3px;
-    background: var(--wcc-surface-alt);
-    border: 1px solid var(--wcc-border);
-    border-radius: 999px;
+    gap: 2px;
+    margin-bottom: -11px;
+    padding: 0 8px;
+    position: relative;
+    z-index: 1;
 }
 
 .wcc-notes-export-tab {
-    min-height: 28px;
-    padding: 4px 10px;
+    min-height: 30px;
+    padding: 5px 12px;
     color: var(--wcc-muted);
-    background: transparent;
-    border: 0;
-    border-radius: 999px;
+    background: var(--wcc-surface);
+    border: 1px solid transparent;
+    border-radius: 7px 7px 0 0;
     cursor: pointer;
     font: inherit;
     font-size: 0.82rem;
@@ -947,8 +948,9 @@ body.has-wcc-modal {
 
 .wcc-notes-export-tab.is-active {
     color: var(--wcc-text);
-    background: var(--wcc-surface);
-    box-shadow: 0 0 0 1px var(--wcc-border);
+    background: var(--wcc-surface-alt);
+    border-color: var(--wcc-border);
+    border-bottom-color: var(--wcc-surface-alt);
 }
 
 .wcc-notes-export-panel[hidden] {
