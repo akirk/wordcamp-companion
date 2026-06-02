@@ -2348,10 +2348,16 @@
         const switcher = element('label', { className: 'wcc-companion-switcher' });
         const select = element('select', { 'aria-label': 'Switch or attend another WordCamp' });
         const shareButton = createShareIconButton();
+        const links = element('div', { className: 'wcc-companion-links' });
         const planButton = element('a', {
             className: 'wcc-plan-link wcc-companion-link-plan',
             href: getPlanYourDayUrl(selectedEvent),
             text: 'Plan your day',
+        });
+        const notesButton = element('a', {
+            className: 'wcc-plan-link wcc-companion-link-notes',
+            href: getNotesUrl(),
+            text: 'Notes',
         });
 
         if (!events.length) {
@@ -2381,8 +2387,9 @@
 
         switcher.append(select);
         switcherRow.append(switcher, shareButton);
+        links.append(planButton, notesButton);
         wrapper.append(switcherRow);
-        wrapper.append(planButton);
+        wrapper.append(links);
 
         return wrapper;
     }

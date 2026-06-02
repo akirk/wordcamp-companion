@@ -1044,6 +1044,13 @@ body.has-wcc-modal {
     line-height: 1;
 }
 
+.wcc-companion-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
 .wcc-plan-link {
     padding: 0;
     color: var(--wcc-muted);
@@ -1882,7 +1889,7 @@ body.has-wcc-modal {
         text-align: left;
     }
 
-    .wcc-companion-link-plan {
+    .wcc-companion-links {
         display: none;
     }
 
