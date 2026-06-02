@@ -272,6 +272,19 @@ class Abilities {
 
         $schedule['days'] = $this->get_schedule_days( $schedule );
         $this->repository->store_schedule_metadata( $event_url, $schedule, $schedule['days'] );
+        $day_key = $this->get_day_key_from_input( $input );
+        if ( '' !== $day_key ) {
+            $timezone = isset( $schedule['timezone'] ) ? sanitize_text_field( (string) $schedule['timezone'] ) : '';
+            $schedule['sessions'] = array_values(
+                array_filter(
+                    isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [],
+                    function ( array $session ) use ( $day_key, $timezone ): bool {
+                        return $this->get_day_key( absint( $session['start'] ?? 0 ), $timezone ) === $day_key;
+                    }
+                )
+            );
+            $schedule['day_filter'] = $day_key;
+        }
 
         return $schedule;
     }
@@ -329,7 +342,7 @@ class Abilities {
         $saved_sessions = $this->get_saved_sessions_for_plan( $event_plan );
         $saved_ids = $this->get_saved_session_ids( $saved_sessions );
         $topics = $this->normalize_string_list( $input['topics'] ?? [] );
-        $day_key = isset( $input['day_key'] ) ? sanitize_text_field( (string) $input['day_key'] ) : '';
+        $day_key = $this->get_day_key_from_input( $input );
         $track = isset( $input['track'] ) ? strtolower( sanitize_text_field( (string) $input['track'] ) ) : '';
         $category = isset( $input['category'] ) ? strtolower( sanitize_text_field( (string) $input['category'] ) ) : '';
         $unsaved_only = array_key_exists( 'unsaved_only', $input ) ? rest_sanitize_boolean( $input['unsaved_only'] ) : true;
@@ -421,6 +434,24 @@ class Abilities {
             return $event_url;
         }
 
+        $event_id = isset( $input['event_id'] ) ? absint( $input['event_id'] ) : 0;
+        if ( $event_id ) {
+            $event = $this->get_wordcamp_by_id( $event_id, ! empty( $input['refresh'] ) );
+            if ( is_wp_error( $event ) ) {
+                return $event;
+            }
+
+            if ( is_array( $event ) && ! empty( $event['event_url'] ) ) {
+                return $this->api->normalize_event_site_url( (string) $event['event_url'] );
+            }
+
+            return new WP_Error(
+                'wordcamp_companion_event_id_not_found',
+                __( 'WordCamp event_id was not found in the upcoming WordCamps list.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
         $plan = is_array( $plan ) ? $plan : $this->repository->get_plan( get_current_user_id() );
         $event_url = isset( $plan['selected_event_url'] ) ? $this->api->normalize_event_site_url( (string) $plan['selected_event_url'] ) : '';
         if ( '' !== $event_url ) {
@@ -432,6 +463,30 @@ class Abilities {
             __( 'Select a WordCamp or provide event_url.', 'wordcamp-companion' ),
             [ 'status' => 400 ]
         );
+    }
+
+    private function get_wordcamp_by_id( int $event_id, bool $force_refresh = false ) {
+        $payload = $this->api->get_wordcamps( $force_refresh );
+        if ( is_wp_error( $payload ) ) {
+            return $payload;
+        }
+
+        foreach ( $payload['wordcamps'] ?? [] as $event ) {
+            if ( is_array( $event ) && absint( $event['id'] ?? 0 ) === $event_id ) {
+                return $event;
+            }
+        }
+
+        return null;
+    }
+
+    private function get_day_key_from_input( array $input ): string {
+        $day_key = isset( $input['day_key'] ) ? sanitize_text_field( (string) $input['day_key'] ) : '';
+        if ( '' === $day_key && isset( $input['day'] ) ) {
+            $day_key = sanitize_text_field( (string) $input['day'] );
+        }
+
+        return preg_match( '/^\d{4}-\d{2}-\d{2}$/', $day_key ) ? $day_key : '';
     }
 
     private function get_event_plan( array $plan, string $event_url ): array {
@@ -826,6 +881,18 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
+                'day' => [
+                    'type'        => 'string',
+                    'description' => 'Optional schedule day in YYYY-MM-DD format. Alias for day_key.',
+                ],
+                'day_key' => [
+                    'type'        => 'string',
+                    'description' => 'Optional schedule day key in YYYY-MM-DD format.',
+                ],
                 'refresh' => [
                     'type'        => 'boolean',
                     'description' => 'Whether to bypass cached schedule data.',
@@ -869,6 +936,10 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
                 'include_schedule_bounds' => [
                     'type'        => 'boolean',
                     'description' => 'Whether to fetch the full schedule when stored day bounds are not available.',
@@ -892,10 +963,18 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
                 'topics' => [
                     'type'        => 'array',
                     'description' => 'Topics or keywords the user is interested in, such as AI, accessibility, community, performance, design, or contributor day.',
                     'items'       => [ 'type' => 'string' ],
+                ],
+                'day' => [
+                    'type'        => 'string',
+                    'description' => 'Optional schedule day in YYYY-MM-DD format. Alias for day_key.',
                 ],
                 'day_key' => [
                     'type'        => 'string',
