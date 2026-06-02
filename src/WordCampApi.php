@@ -11,7 +11,7 @@ class WordCampApi {
     private const WORDCAMPS_CACHE_KEY = 'wordcamp_companion_wordcamps_v4';
     private const WORDCAMPS_CACHE_TTL = 6 * HOUR_IN_SECONDS;
     private const SCHEDULE_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
-    private const SCHEDULE_CACHE_SCHEMA_VERSION = 2;
+    private const SCHEDULE_CACHE_SCHEMA_VERSION = 3;
     private const COMPANION_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
     private const COMPANION_CACHE_SCHEMA_VERSION = 4;
     private const MAX_COLLECTION_PAGES = 20;
@@ -152,15 +152,16 @@ class WordCampApi {
             }
         }
 
+        $schedule_timezone = isset( $index['timezone_string'] ) ? sanitize_text_field( $index['timezone_string'] ) : '';
         $normalized_speakers = $this->normalize_speakers( $speakers );
         $normalized_tracks = $this->normalize_terms( $tracks );
         $normalized_categories = $this->normalize_terms( $categories );
-        $normalized_sessions = $this->normalize_sessions( $sessions, $normalized_speakers, $normalized_tracks, $normalized_categories );
+        $normalized_sessions = $this->normalize_sessions( $sessions, $normalized_speakers, $normalized_tracks, $normalized_categories, $schedule_timezone );
 
         $payload = [
             'event_url'   => $event_url,
             'site_name'   => isset( $index['name'] ) ? $this->normalize_text( $index['name'] ) : '',
-            'timezone'    => isset( $index['timezone_string'] ) ? sanitize_text_field( $index['timezone_string'] ) : '',
+            'timezone'    => $schedule_timezone,
             'sessions'    => $normalized_sessions,
             'speakers'    => array_values( $normalized_speakers ),
             'tracks'      => array_values( $normalized_tracks ),
@@ -261,7 +262,7 @@ class WordCampApi {
             'event_url'  => $context['event_url'],
             'site_name'  => $context['site_name'],
             'timezone'   => $context['timezone'],
-            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks ),
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks, $context['timezone'] ),
             'days'       => $days,
             'speakers'   => array_values( $normalized_speakers ),
             'tracks'     => array_values( $normalized_tracks ),
@@ -318,7 +319,7 @@ class WordCampApi {
             'event_url'  => $context['event_url'],
             'site_name'  => $context['site_name'],
             'timezone'   => $context['timezone'],
-            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks ),
+            'sessions'   => $this->normalize_companion_sessions( $sessions, $normalized_speakers, $normalized_tracks, $context['timezone'] ),
             'speakers'   => array_values( $normalized_speakers ),
             'tracks'     => array_values( $normalized_tracks ),
             'fetched_at' => time(),
@@ -655,7 +656,7 @@ class WordCampApi {
         return '';
     }
 
-    private function normalize_sessions( array $sessions, array $speakers, array $tracks, array $categories ): array {
+    private function normalize_sessions( array $sessions, array $speakers, array $tracks, array $categories, string $timezone ): array {
         $normalized = [];
 
         foreach ( $sessions as $session ) {
@@ -669,6 +670,7 @@ class WordCampApi {
             $category_ids = $this->normalize_id_list( $session['session_category'] ?? [] );
             $start = $this->normalize_timestamp( $meta['_wcpt_session_time'] ?? null );
             $duration = isset( $meta['_wcpt_session_duration'] ) ? absint( $meta['_wcpt_session_duration'] ) : 0;
+            $end = $start && $duration ? $start + $duration : null;
             $description = isset( $session['content']['rendered'] ) ? $session['content']['rendered'] : ( $session['excerpt']['rendered'] ?? '' );
 
             $normalized[] = [
@@ -678,8 +680,11 @@ class WordCampApi {
                 'description'    => $this->compact_text( $description ),
                 'url'            => isset( $session['link'] ) ? esc_url_raw( $session['link'] ) : '',
                 'start'          => $start,
+                'start_local'    => $this->format_local_datetime( $start, $timezone ),
                 'duration'       => $duration,
-                'end'            => $start && $duration ? $start + $duration : null,
+                'end'            => $end,
+                'end_local'      => $this->format_local_datetime( $end, $timezone ),
+                'time_range'     => $this->format_local_time_range( $start, $end, $timezone ),
                 'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
                 'speaker_ids'    => $speaker_ids,
                 'speaker_names'  => $this->names_for_ids( $speaker_ids, $speakers ),
@@ -706,7 +711,7 @@ class WordCampApi {
         return array_values( $normalized );
     }
 
-    private function normalize_companion_sessions( array $sessions, array $speakers, array $tracks ): array {
+    private function normalize_companion_sessions( array $sessions, array $speakers, array $tracks, string $timezone ): array {
         $normalized = [];
 
         foreach ( $sessions as $session ) {
@@ -719,6 +724,7 @@ class WordCampApi {
             $track_ids = $this->normalize_id_list( $session['session_track'] ?? [] );
             $start = $this->normalize_timestamp( $meta['_wcpt_session_time'] ?? null );
             $duration = isset( $meta['_wcpt_session_duration'] ) ? absint( $meta['_wcpt_session_duration'] ) : 0;
+            $end = $start && $duration ? $start + $duration : null;
 
             $normalized[] = [
                 'id'             => isset( $session['id'] ) ? absint( $session['id'] ) : 0,
@@ -727,8 +733,11 @@ class WordCampApi {
                 'description'    => '',
                 'url'            => isset( $session['link'] ) ? esc_url_raw( $session['link'] ) : '',
                 'start'          => $start,
+                'start_local'    => $this->format_local_datetime( $start, $timezone ),
                 'duration'       => $duration,
-                'end'            => $start && $duration ? $start + $duration : null,
+                'end'            => $end,
+                'end_local'      => $this->format_local_datetime( $end, $timezone ),
+                'time_range'     => $this->format_local_time_range( $start, $end, $timezone ),
                 'type'           => isset( $meta['_wcpt_session_type'] ) ? sanitize_key( $meta['_wcpt_session_type'] ) : '',
                 'speaker_ids'    => $speaker_ids,
                 'speaker_names'  => $this->names_for_ids( $speaker_ids, $speakers ),
@@ -1017,6 +1026,47 @@ class WordCampApi {
         }
 
         return null;
+    }
+
+    private function format_local_datetime( ?int $timestamp, string $timezone ): string {
+        if ( ! $timestamp ) {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable( '@' . $timestamp );
+            $date = $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            return $date->format( 'Y-m-d g:i A T' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d g:i A \U\T\C', $timestamp );
+        }
+    }
+
+    private function format_local_time_range( ?int $start, ?int $end, string $timezone ): string {
+        if ( ! $start ) {
+            return '';
+        }
+
+        try {
+            $start_date = new \DateTimeImmutable( '@' . $start );
+            $start_date = $start_date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            if ( ! $end ) {
+                return $start_date->format( 'g:i A T' );
+            }
+
+            $end_date = new \DateTimeImmutable( '@' . $end );
+            $end_date = $end_date->setTimezone( $start_date->getTimezone() );
+
+            return $start_date->format( 'g:i A' ) . ' - ' . $end_date->format( 'g:i A T' );
+        } catch ( \Exception $exception ) {
+            if ( ! $end ) {
+                return gmdate( 'g:i A \U\T\C', $start );
+            }
+
+            return gmdate( 'g:i A', $start ) . ' - ' . gmdate( 'g:i A \U\T\C', $end );
+        }
     }
 
     private function normalize_text( $value ): string {
