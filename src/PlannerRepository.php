@@ -681,16 +681,24 @@ class PlannerRepository {
             return [];
         }
 
+        $wordcamp_term_id = absint( get_post_meta( $post_id, 'wcc_wordcamp_term_id', true ) );
+        $start = absint( get_post_meta( $post_id, 'wcc_session_start', true ) );
+        $end = absint( get_post_meta( $post_id, 'wcc_session_end', true ) );
+        $timezone = $this->get_saved_session_timezone( $wordcamp_term_id, $post_id );
+
         return [
             'post_id'        => $post_id,
             'session_id'     => $session_id,
             'event_url'      => esc_url_raw( (string) get_post_meta( $post_id, 'wcc_event_url', true ) ),
-            'wordcamp_term_id' => absint( get_post_meta( $post_id, 'wcc_wordcamp_term_id', true ) ),
+            'wordcamp_term_id' => $wordcamp_term_id,
             'wordcamp_term_ids' => $this->get_saved_session_term_ids( $post_id ),
             'title'          => get_the_title( $post_id ),
             'url'            => esc_url_raw( (string) get_post_meta( $post_id, 'wcc_session_url', true ) ),
-            'start'          => absint( get_post_meta( $post_id, 'wcc_session_start', true ) ),
-            'end'            => absint( get_post_meta( $post_id, 'wcc_session_end', true ) ),
+            'start'          => $start,
+            'start_local'    => $this->format_local_datetime( $start, $timezone ),
+            'end'            => $end,
+            'end_local'      => $this->format_local_datetime( $end, $timezone ),
+            'time_range'     => $this->format_local_time_range( $start, $end, $timezone ),
             'duration'       => absint( get_post_meta( $post_id, 'wcc_session_duration', true ) ),
             'type'           => sanitize_key( (string) get_post_meta( $post_id, 'wcc_session_type', true ) ),
             'speaker_names'  => $this->split_meta_list( (string) get_post_meta( $post_id, 'wcc_speaker_names', true ) ),
@@ -700,6 +708,65 @@ class PlannerRepository {
             'notes'          => sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) ),
             'updated_at'     => absint( get_post_modified_time( 'U', true, $post_id ) ),
         ];
+    }
+
+    private function get_saved_session_timezone( int $wordcamp_term_id, int $post_id ): string {
+        if ( $wordcamp_term_id ) {
+            $timezone = get_term_meta( $wordcamp_term_id, self::SCHEDULE_TIMEZONE_META_KEY, true );
+            if ( is_string( $timezone ) && '' !== $timezone ) {
+                return sanitize_text_field( $timezone );
+            }
+        }
+
+        foreach ( $this->get_saved_session_term_ids( $post_id ) as $term_id ) {
+            $timezone = get_term_meta( $term_id, self::SCHEDULE_TIMEZONE_META_KEY, true );
+            if ( is_string( $timezone ) && '' !== $timezone ) {
+                return sanitize_text_field( $timezone );
+            }
+        }
+
+        return 'UTC';
+    }
+
+    private function format_local_datetime( int $timestamp, string $timezone ): string {
+        if ( ! $timestamp ) {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable( '@' . $timestamp );
+            $date = $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            return $date->format( 'Y-m-d g:i A T' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d g:i A \U\T\C', $timestamp );
+        }
+    }
+
+    private function format_local_time_range( int $start, int $end, string $timezone ): string {
+        if ( ! $start ) {
+            return '';
+        }
+
+        try {
+            $start_date = new \DateTimeImmutable( '@' . $start );
+            $start_date = $start_date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            if ( ! $end ) {
+                return $start_date->format( 'g:i A T' );
+            }
+
+            $end_date = new \DateTimeImmutable( '@' . $end );
+            $end_date = $end_date->setTimezone( $start_date->getTimezone() );
+
+            return $start_date->format( 'g:i A' ) . ' - ' . $end_date->format( 'g:i A T' );
+        } catch ( \Exception $exception ) {
+            if ( ! $end ) {
+                return gmdate( 'g:i A \U\T\C', $start );
+            }
+
+            return gmdate( 'g:i A', $start ) . ' - ' . gmdate( 'g:i A \U\T\C', $end );
+        }
     }
 
     private function get_saved_session_term_ids( int $post_id ): array {
