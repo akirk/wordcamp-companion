@@ -11,11 +11,13 @@ class App extends BaseApp {
     private WordCampApi $api;
     private PlannerRepository $repository;
     private RestController $rest_controller;
+    private Abilities $abilities;
 
     public function __construct() {
         $this->api = new WordCampApi();
         $this->repository = new PlannerRepository( $this->api );
         $this->rest_controller = new RestController( $this->api, $this->repository );
+        $this->abilities = new Abilities( $this->api, $this->repository );
 
         $this->app = new WpApp(
             $this->get_template_dir(),
