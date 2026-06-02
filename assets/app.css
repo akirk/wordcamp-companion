@@ -248,9 +248,16 @@ a:focus-visible {
 }
 
 .wcc-notes-header-side {
-    display: grid;
-    justify-items: end;
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.wcc-notes-header-side .wcc-plan-summary {
+    min-width: auto;
+    white-space: nowrap;
 }
 
 .wcc-selected-event,
@@ -1939,7 +1946,7 @@ body.has-wcc-modal {
     }
 
     .wcc-notes-header-side {
-        justify-items: start;
+        justify-content: flex-start;
     }
 
     .wcc-setting-row,
@@ -1963,8 +1970,8 @@ body.has-wcc-modal {
     }
 
     .wcc-notes-export-header {
-        align-items: flex-start;
-        flex-direction: column;
+        align-items: center;
+        flex-direction: row;
     }
 
     .wcc-content {
