@@ -3002,15 +3002,38 @@
     function insertNoteListMarkdown(textarea) {
         const start = textarea.selectionStart || 0;
         const end = textarea.selectionEnd || 0;
-        const selected = textarea.value.slice(start, end);
-        const inserted = selected
-            ? selected.split('\n').map(function (line) {
-                return line.trim() ? '- ' + line.replace(/^[-*]\s+/, '') : line;
-            }).join('\n')
-            : '- ';
+        const value = textarea.value;
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+        const selectionEnd = end > start ? end : start;
+        const lineEndIndex = value.indexOf('\n', selectionEnd);
+        const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+        const block = value.slice(lineStart, lineEnd);
+        const lines = block.split('\n');
+        const shouldRemove = lines.some(function (line) {
+            return line.trim();
+        }) && lines.filter(function (line) {
+            return line.trim();
+        }).every(function (line) {
+            return /^\s*[-*]\s+/.test(line);
+        });
+        const inserted = lines.map(function (line) {
+            if (!line.trim()) {
+                return line;
+            }
 
-        replaceNoteSelection(textarea, inserted, start, end);
-        textarea.setSelectionRange(start + inserted.length, start + inserted.length);
+            if (shouldRemove) {
+                return line.replace(/^(\s*)[-*]\s+/, '$1');
+            }
+
+            return line.replace(/^(\s*)/, '$1- ');
+        }).join('\n');
+        const offset = inserted.length - block.length;
+
+        replaceNoteSelection(textarea, inserted, lineStart, lineEnd);
+        textarea.setSelectionRange(
+            Math.max(lineStart, start + offset),
+            Math.max(lineStart, end + offset)
+        );
     }
 
     function insertNoteLinkMarkdown(textarea) {
