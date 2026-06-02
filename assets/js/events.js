@@ -29,6 +29,9 @@
     function render() {
         return WCC.render.apply(WCC, arguments);
     }
+    function refreshNotesExportPreview() {
+        return WCC.refreshNotesExportPreview.apply(WCC, arguments);
+    }
     function openImportScheduleDialog() {
         return WCC.openImportScheduleDialog.apply(WCC, arguments);
     }
@@ -92,6 +95,49 @@
     function updateSavedSessionNotes() {
         return WCC.updateSavedSessionNotes.apply(WCC, arguments);
     }
+
+    function setNoteAutosaveStatus(postId, status) {
+        postId = Number(postId || 0);
+        if (!postId) {
+            return;
+        }
+
+        if (status) {
+            state.noteAutosaveStatus[postId] = status;
+        } else {
+            delete state.noteAutosaveStatus[postId];
+        }
+
+        Array.from(document.querySelectorAll('[data-note-post-id="' + postId + '"]')).forEach(function (element) {
+            if (status === 'saving') {
+                element.textContent = 'Saving...';
+            } else if (status === 'saved') {
+                element.textContent = 'Saved';
+            } else if (status === 'error') {
+                element.textContent = 'Could not save. Will retry when you edit.';
+            } else if (status === 'unsaved') {
+                element.textContent = 'Unsaved changes';
+            }
+        });
+    }
+
+    function queueSessionNotesAutosave(postId, notes) {
+        postId = Number(postId || 0);
+        if (!postId) {
+            return;
+        }
+
+        if (state.noteAutosaveTimers[postId]) {
+            window.clearTimeout(state.noteAutosaveTimers[postId]);
+        }
+
+        setNoteAutosaveStatus(postId, 'unsaved');
+        state.noteAutosaveTimers[postId] = window.setTimeout(function () {
+            delete state.noteAutosaveTimers[postId];
+            saveSessionNotes(postId, notes, { quiet: true });
+        }, 900);
+    }
+
     function addSavedSessionPost() {
         return WCC.addSavedSessionPost.apply(WCC, arguments);
     }
@@ -580,15 +626,29 @@
         }
     }
 
-    async function saveSessionNotes(postId, notes) {
+    async function saveSessionNotes(postId, notes, options) {
+        options = options || {};
         postId = Number(postId || 0);
-        if (!postId || state.savingNotePostId) {
+        if (!postId) {
+            return;
+        }
+
+        if (state.noteAutosaveTimers[postId]) {
+            window.clearTimeout(state.noteAutosaveTimers[postId]);
+            delete state.noteAutosaveTimers[postId];
+        }
+
+        if (state.savingNotePostId) {
+            queueSessionNotesAutosave(postId, notes);
             return;
         }
 
         state.savingNotePostId = postId;
+        setNoteAutosaveStatus(postId, 'saving');
         state.alert = null;
-        render();
+        if (!options.quiet) {
+            render();
+        }
 
         try {
             const updatedPost = await wpApi((config.savedSessionRestBase || 'wordcamp-companion-sessions') + '/' + postId, {
@@ -604,13 +664,22 @@
                 : notes;
 
             updateSavedSessionNotes(postId, updatedNotes);
-            delete state.noteDrafts[postId];
+            refreshNotesExportPreview();
+            if (state.noteDrafts[postId] === notes) {
+                delete state.noteDrafts[postId];
+                setNoteAutosaveStatus(postId, 'saved');
+            } else {
+                queueSessionNotesAutosave(postId, state.noteDrafts[postId]);
+            }
             state.alert = null;
         } catch (error) {
+            setNoteAutosaveStatus(postId, 'error');
             state.alert = getErrorAlert(error);
         } finally {
             state.savingNotePostId = null;
-            render();
+            if (!options.quiet) {
+                render();
+            }
         }
     }
 
@@ -663,6 +732,7 @@
         shouldLoadInitialCompanionGaps: shouldLoadInitialCompanionGaps,
         loadInitialCompanionGaps: loadInitialCompanionGaps,
         toggleSession: toggleSession,
+        queueSessionNotesAutosave: queueSessionNotesAutosave,
         saveSessionNotes: saveSessionNotes,
         saveSettings: saveSettings
     });

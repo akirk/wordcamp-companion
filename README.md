@@ -26,8 +26,9 @@ Features include:
 - A companion timeline that uses saved sessions and locally stored WordCamp metadata.
 - Inline session adding between saved-session gaps.
 - Session overlap warnings for competing tracks.
-- Session notes stored with saved sessions.
-- Markdown copy and download for exporting notes.
+- Auto-saving session notes stored with saved sessions.
+- Lightweight Markdown note controls for bold, italic, links, and lists.
+- Rendered Markdown export preview with copy and download actions.
 - Optional debug time controls for testing the live companion view.
 
 ## Installation
@@ -87,6 +88,7 @@ https://github.com/user-attachments/assets/9a955b34-9d07-482a-a889-a43c07e64767
 ### 1.0.1
 
 - Add the WordCamp Companion app with upcoming WordCamp selection, schedule planning, companion timeline, saved sessions, notes, and export.
+- Add auto-saving session notes, lightweight Markdown editing controls, and a rendered Markdown export preview.
 
 ## Upgrade Notice
 

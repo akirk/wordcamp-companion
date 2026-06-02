@@ -248,9 +248,16 @@ a:focus-visible {
 }
 
 .wcc-notes-header-side {
-    display: grid;
-    justify-items: end;
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.wcc-notes-header-side .wcc-plan-summary {
+    min-width: auto;
+    white-space: nowrap;
 }
 
 .wcc-selected-event,
@@ -872,6 +879,7 @@ body.has-wcc-modal {
 .wcc-notes-export {
     display: grid;
     gap: 10px;
+    margin-bottom: 14px;
     padding: 14px;
     background: var(--wcc-surface);
     border: 1px solid var(--wcc-border);
@@ -883,16 +891,114 @@ body.has-wcc-modal {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    cursor: pointer;
+}
+
+.wcc-notes-export-header::after {
+    content: "";
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 9px;
+    height: 9px;
+    border-color: var(--wcc-primary);
+    border-style: solid;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    transition: transform 0.16s ease;
+}
+
+.wcc-notes-export[open] .wcc-notes-export-header::after {
+    transform: rotate(225deg);
+}
+
+.wcc-notes-export-header::marker {
+    color: var(--wcc-primary);
 }
 
 .wcc-notes-export-title {
     display: grid;
     gap: 2px;
+    min-width: 0;
 }
 
 .wcc-notes-export-title span {
     color: var(--wcc-muted);
     font-size: 0.86rem;
+}
+
+.wcc-notes-export-help {
+    margin: 0;
+    color: var(--wcc-muted);
+    font-size: 0.9rem;
+}
+
+.wcc-notes-export-tabs {
+    display: inline-flex;
+    width: fit-content;
+    gap: 2px;
+    margin-top: 4px;
+    margin-bottom: 0;
+    padding: 0 8px;
+    position: relative;
+    z-index: 1;
+}
+
+.wcc-notes-export-tab {
+    min-height: 30px;
+    padding: 5px 12px;
+    color: var(--wcc-muted);
+    background: var(--wcc-surface);
+    border: 1px solid transparent;
+    border-radius: 7px 7px 0 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 750;
+}
+
+.wcc-notes-export-tab.is-active {
+    color: var(--wcc-text);
+    background: var(--wcc-surface-alt);
+    border-color: var(--wcc-border);
+    border-bottom-color: var(--wcc-surface-alt);
+}
+
+.wcc-notes-export-panel[hidden] {
+    display: none;
+}
+
+.wcc-notes-rendered-preview {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+}
+
+.wcc-notes-rendered-preview h1,
+.wcc-notes-rendered-preview h2,
+.wcc-notes-rendered-preview h3,
+.wcc-notes-rendered-preview p,
+.wcc-notes-rendered-preview ul {
+    margin: 0;
+}
+
+.wcc-notes-rendered-preview h1 {
+    font-size: 1.18rem;
+}
+
+.wcc-notes-rendered-preview h2 {
+    margin-top: 4px;
+    font-size: 1rem;
+}
+
+.wcc-notes-rendered-preview h3 {
+    font-size: 0.94rem;
+}
+
+.wcc-notes-rendered-preview ul {
+    padding-left: 1.25rem;
 }
 
 .wcc-notes-export-actions,
@@ -986,6 +1092,13 @@ body.has-wcc-modal {
     height: 20px;
     font-size: 20px;
     line-height: 1;
+}
+
+.wcc-companion-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
 }
 
 .wcc-plan-link {
@@ -1678,14 +1791,39 @@ body.has-wcc-modal {
     margin-top: 8px;
 }
 
+.wcc-note-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.wcc-note-tool {
+    min-height: 28px;
+    padding: 4px 8px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 750;
+}
+
+.wcc-note-tool:hover,
+.wcc-note-tool:focus-visible {
+    border-color: var(--wcc-primary);
+}
+
 .wcc-note-actions {
     margin-top: 8px;
 }
 
-.wcc-note-save {
-    min-height: 32px;
-    padding: 5px 10px;
-    font-size: 0.86rem;
+.wcc-note-autosave-status {
+    color: var(--wcc-muted);
+    font-size: 0.82rem;
+    font-weight: 650;
 }
 
 .wcc-session-notes.is-compact {
@@ -1694,6 +1832,11 @@ body.has-wcc-modal {
 
 .wcc-session-notes.is-compact .wcc-note-editor {
     min-height: 86px;
+}
+
+.wcc-note-editor {
+    overflow: hidden;
+    resize: none;
 }
 
 .wcc-tags {
@@ -1796,12 +1939,12 @@ body.has-wcc-modal {
         text-align: left;
     }
 
-    .wcc-companion-link-plan {
+    .wcc-companion-links {
         display: none;
     }
 
     .wcc-notes-header-side {
-        justify-items: start;
+        justify-content: flex-start;
     }
 
     .wcc-setting-row,
@@ -1825,8 +1968,8 @@ body.has-wcc-modal {
     }
 
     .wcc-notes-export-header {
-        align-items: flex-start;
-        flex-direction: column;
+        align-items: center;
+        flex-direction: row;
     }
 
     .wcc-content {
