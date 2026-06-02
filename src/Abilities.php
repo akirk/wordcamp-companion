@@ -542,13 +542,9 @@ class Abilities {
             $saved_sessions[] = $this->saved_session_from_session( absint( $post_id ), $event_url, $term_id, $session );
         }
 
-        return [
+        $response = [
             'event_url'              => $event_url,
             'saved'                  => $created,
-            'already_saved'          => array_values( $already_saved ),
-            'unresolved_session_ids' => $unresolved_session_ids,
-            'failed'                 => $failed,
-            'conflicts'              => $this->get_conflicts( $saved_sessions ),
             'summary'                => [
                 'saved_count'          => count( $created ),
                 'already_saved_count'  => count( $already_saved ),
@@ -557,6 +553,25 @@ class Abilities {
                 'total_saved_sessions' => count( $saved_sessions ),
             ],
         ];
+        $conflicts = $this->get_conflicts( $saved_sessions );
+
+        if ( ! empty( $already_saved ) ) {
+            $response['already_saved'] = array_values( $already_saved );
+        }
+
+        if ( ! empty( $unresolved_session_ids ) ) {
+            $response['unresolved_session_ids'] = $unresolved_session_ids;
+        }
+
+        if ( ! empty( $failed ) ) {
+            $response['failed'] = $failed;
+        }
+
+        if ( ! empty( $conflicts ) ) {
+            $response['conflicts'] = $conflicts;
+        }
+
+        return $response;
     }
 
     private function get_event_url_from_input_or_plan( array $input, ?array $plan = null ) {
