@@ -2983,6 +2983,13 @@
             return;
         }
 
+        if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            insertNoteLinkMarkdown(textarea);
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            return;
+        }
+
         if (event.key === 'Enter' && continueNoteList(textarea)) {
             event.preventDefault();
             handleNoteEditorInput(textarea, postId, persistedValue, status);
@@ -3038,19 +3045,41 @@
     }
 
     function insertNoteLinkMarkdown(textarea) {
+        const selection = getNoteLinkSelection(textarea);
+        const selected = textarea.value.slice(selection.start, selection.end) || 'link text';
+        const inserted = '[' + selected + '](https://)';
+        const cursor = selection.start + selected.length + 11;
+
+        replaceNoteSelection(textarea, inserted, selection.start, selection.end);
+        textarea.setSelectionRange(cursor, cursor);
+        return true;
+    }
+
+    function getNoteLinkSelection(textarea) {
+        const value = textarea.value;
         const start = textarea.selectionStart || 0;
         const end = textarea.selectionEnd || 0;
-        const selected = textarea.value.slice(start, end) || 'link text';
-        const url = window.prompt('Link URL', 'https://');
 
-        if (!url) {
-            return false;
+        if (start !== end) {
+            return { start: start, end: end };
         }
 
-        const inserted = '[' + selected + '](' + url + ')';
-        replaceNoteSelection(textarea, inserted, start, end);
-        textarea.setSelectionRange(start + 1, start + 1 + selected.length);
-        return true;
+        let wordStart = start;
+        let wordEnd = end;
+
+        while (wordStart > 0 && isNoteLinkWordCharacter(value.charAt(wordStart - 1))) {
+            wordStart--;
+        }
+
+        while (wordEnd < value.length && isNoteLinkWordCharacter(value.charAt(wordEnd))) {
+            wordEnd++;
+        }
+
+        return { start: wordStart, end: wordEnd };
+    }
+
+    function isNoteLinkWordCharacter(character) {
+        return /[^\s()[\]{}<>]/.test(character);
     }
 
     function continueNoteList(textarea) {
