@@ -134,7 +134,7 @@ class Abilities {
             'wordcamp-companion/get-schedule',
             [
                 'label'               => __( 'Get WordCamp Schedule', 'wordcamp-companion' ),
-                'description'         => __( 'Loads the full public schedule for a WordCamp, including sessions, tracks, speakers, categories, timezone, and day bounds.', 'wordcamp-companion' ),
+                'description'         => __( 'Loads the full public schedule for a WordCamp, with optional session search by title, description, speaker, track, or category.', 'wordcamp-companion' ),
                 'category'            => 'wordcamp-companion',
                 'input_schema'        => $this->schema_event_url_input(),
                 'output_schema'       => $this->schema_open_object(),
@@ -144,7 +144,7 @@ class Abilities {
                     'annotations' => [
                         'readonly'     => true,
                         'destructive'  => false,
-                        'instructions' => 'Use this when the assistant needs the schedule before suggesting sessions. If event_url is omitted, the selected WordCamp is used.',
+                        'instructions' => 'Use this when the assistant needs the schedule before suggesting sessions. Pass search to find matching sessions by title, description, speaker, track, or category. If event_url is omitted, the selected WordCamp is used.',
                     ],
                 ],
             ]
@@ -312,6 +312,7 @@ class Abilities {
 
         $schedule['days'] = $this->get_schedule_days( $schedule );
         $this->repository->store_schedule_metadata( $event_url, $schedule, $schedule['days'] );
+        $total_sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? count( $schedule['sessions'] ) : 0;
         $day_key = $this->get_day_key_from_input( $input );
         if ( '' !== $day_key ) {
             $timezone = isset( $schedule['timezone'] ) ? sanitize_text_field( (string) $schedule['timezone'] ) : '';
@@ -324,6 +325,28 @@ class Abilities {
                 )
             );
             $schedule['day_filter'] = $day_key;
+        }
+
+        $search = isset( $input['search'] ) ? sanitize_text_field( (string) $input['search'] ) : '';
+        if ( '' !== $search ) {
+            $schedule['sessions'] = array_values(
+                array_filter(
+                    isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [],
+                    function ( array $session ) use ( $search ): bool {
+                        return $this->session_matches_search( $session, $search );
+                    }
+                )
+            );
+            $schedule['search_filter'] = $search;
+        }
+
+        if ( '' !== $day_key || '' !== $search ) {
+            $schedule['filters'] = [
+                'day_key' => $day_key,
+                'search'  => $search,
+            ];
+            $schedule['filtered_count'] = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? count( $schedule['sessions'] ) : 0;
+            $schedule['total_sessions'] = $total_sessions;
         }
 
         return $schedule;
@@ -1260,6 +1283,31 @@ class Abilities {
         return $score;
     }
 
+    private function session_matches_search( array $session, string $search ): bool {
+        $search = strtolower( trim( $search ) );
+        if ( '' === $search ) {
+            return true;
+        }
+
+        return false !== strpos( $this->get_session_search_text( $session ), $search );
+    }
+
+    private function get_session_search_text( array $session ): string {
+        return strtolower(
+            implode(
+                ' ',
+                [
+                    (string) ( $session['title'] ?? '' ),
+                    (string) ( $session['description'] ?? '' ),
+                    (string) ( $session['slug'] ?? '' ),
+                    implode( ' ', isset( $session['speaker_names'] ) && is_array( $session['speaker_names'] ) ? $session['speaker_names'] : [] ),
+                    implode( ' ', isset( $session['track_names'] ) && is_array( $session['track_names'] ) ? $session['track_names'] : [] ),
+                    implode( ' ', isset( $session['category_names'] ) && is_array( $session['category_names'] ) ? $session['category_names'] : [] ),
+                ]
+            )
+        );
+    }
+
     private function session_list_contains( $values, string $needle ): bool {
         if ( ! is_array( $values ) ) {
             return false;
@@ -1330,6 +1378,10 @@ class Abilities {
                 'day_key' => [
                     'type'        => 'string',
                     'description' => 'Optional schedule day key in YYYY-MM-DD format.',
+                ],
+                'search' => [
+                    'type'        => 'string',
+                    'description' => 'Optional text to match against session title, description, speaker, track, category, or slug.',
                 ],
                 'refresh' => [
                     'type'        => 'boolean',
