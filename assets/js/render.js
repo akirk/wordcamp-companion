@@ -3009,6 +3009,7 @@
         const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
         const block = value.slice(lineStart, lineEnd);
         const lines = block.split('\n');
+        const isSingleEmptyLine = start === end && lines.length === 1 && !lines[0].trim();
         const shouldRemove = lines.some(function (line) {
             return line.trim();
         }) && lines.filter(function (line) {
@@ -3018,7 +3019,7 @@
         });
         const inserted = lines.map(function (line) {
             if (!line.trim()) {
-                return line;
+                return isSingleEmptyLine ? '- ' : line;
             }
 
             if (shouldRemove) {
