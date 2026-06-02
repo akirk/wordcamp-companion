@@ -26,6 +26,8 @@
         savingSessionId: null,
         savingCompanionEventUrl: '',
         savingNotePostId: null,
+        noteAutosaveTimers: {},
+        noteAutosaveStatus: {},
         noteDrafts: {},
         notesExportCopied: false,
         savingSettings: false,

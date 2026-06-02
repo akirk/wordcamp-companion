@@ -895,6 +895,57 @@ body.has-wcc-modal {
     font-size: 0.86rem;
 }
 
+.wcc-notes-export-help {
+    margin: 0;
+    color: var(--wcc-muted);
+    font-size: 0.9rem;
+}
+
+.wcc-notes-rendered-label,
+.wcc-notes-markdown-label {
+    color: var(--wcc-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.wcc-notes-rendered-preview {
+    display: grid;
+    gap: 8px;
+    max-height: 360px;
+    overflow: auto;
+    padding: 12px;
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+}
+
+.wcc-notes-rendered-preview h1,
+.wcc-notes-rendered-preview h2,
+.wcc-notes-rendered-preview h3,
+.wcc-notes-rendered-preview p,
+.wcc-notes-rendered-preview ul {
+    margin: 0;
+}
+
+.wcc-notes-rendered-preview h1 {
+    font-size: 1.18rem;
+}
+
+.wcc-notes-rendered-preview h2 {
+    margin-top: 4px;
+    font-size: 1rem;
+}
+
+.wcc-notes-rendered-preview h3 {
+    font-size: 0.94rem;
+}
+
+.wcc-notes-rendered-preview ul {
+    padding-left: 1.25rem;
+}
+
 .wcc-notes-export-actions,
 .wcc-note-actions {
     display: flex;
@@ -1678,14 +1729,39 @@ body.has-wcc-modal {
     margin-top: 8px;
 }
 
+.wcc-note-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.wcc-note-tool {
+    min-height: 28px;
+    padding: 4px 8px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 750;
+}
+
+.wcc-note-tool:hover,
+.wcc-note-tool:focus-visible {
+    border-color: var(--wcc-primary);
+}
+
 .wcc-note-actions {
     margin-top: 8px;
 }
 
-.wcc-note-save {
-    min-height: 32px;
-    padding: 5px 10px;
-    font-size: 0.86rem;
+.wcc-note-autosave-status {
+    color: var(--wcc-muted);
+    font-size: 0.82rem;
+    font-weight: 650;
 }
 
 .wcc-session-notes.is-compact {
@@ -1694,6 +1770,11 @@ body.has-wcc-modal {
 
 .wcc-session-notes.is-compact .wcc-note-editor {
     min-height: 86px;
+}
+
+.wcc-note-editor {
+    overflow: hidden;
+    resize: none;
 }
 
 .wcc-tags {

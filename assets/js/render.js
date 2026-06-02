@@ -26,8 +26,8 @@
     function toggleSession() {
         return WCC.toggleSession.apply(WCC, arguments);
     }
-    function saveSessionNotes() {
-        return WCC.saveSessionNotes.apply(WCC, arguments);
+    function queueSessionNotesAutosave() {
+        return WCC.queueSessionNotesAutosave.apply(WCC, arguments);
     }
     function getErrorAlert() {
         return WCC.getErrorAlert.apply(WCC, arguments);
@@ -1407,8 +1407,15 @@
         const actions = element('div', { className: 'wcc-notes-export-actions' });
         const output = element('textarea', {
             className: 'wcc-notes-output',
+            'data-notes-export-output': 'true',
             readonly: 'readonly',
             rows: notedCount ? '8' : '3',
+            'aria-label': 'Generated Markdown export of your session notes',
+        });
+        const preview = element('div', {
+            className: 'wcc-notes-rendered-preview',
+            'data-notes-export-rendered': 'true',
+            'aria-label': 'Rendered preview of your exported notes',
         });
         const copyButton = element('button', {
             className: 'wcc-button',
@@ -1422,23 +1429,188 @@
         });
 
         title.append(
-            element('strong', { text: 'Session notes' }),
-            element('span', { text: notedCount + ' with notes / ' + sessions.length + ' saved' })
+            element('strong', { text: 'Markdown export' }),
+            element('span', {
+                'data-notes-export-count': 'true',
+                text: getNotesExportCountText(notedCount, sessions.length),
+            })
         );
         output.value = markdown;
+        renderMarkdownPreview(markdown, preview);
 
         copyButton.addEventListener('click', function () {
-            copyNotesMarkdown(markdown);
+            copyNotesMarkdown(buildNotesMarkdown(getCurrentNoteSessions()));
         });
         downloadButton.addEventListener('click', function () {
-            downloadNotesMarkdown(markdown);
+            downloadNotesMarkdown(buildNotesMarkdown(getCurrentNoteSessions()));
         });
 
         actions.append(copyButton, downloadButton);
         header.append(title, actions);
-        section.append(header, output);
+        section.append(
+            header,
+            element('p', {
+                className: 'wcc-notes-export-help',
+                text: 'This read-only preview is built from the individual session notes below. Edit a session note to update the export automatically.',
+            }),
+            element('div', { className: 'wcc-notes-rendered-label', text: 'Rendered preview' }),
+            preview,
+            element('div', { className: 'wcc-notes-markdown-label', text: 'Markdown source' }),
+            output
+        );
 
         return section;
+    }
+
+    function getCurrentNoteSessions() {
+        const selectedPlan = getSelectedPlan();
+        const savedPosts = selectedPlan && Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions : [];
+
+        return savedPosts.map(savedSessionPostToSession).filter(function (session) {
+            return session.id && session.start;
+        }).sort(compareSessions);
+    }
+
+    function getNotesExportCountText(notedCount, sessionCount) {
+        return 'Generated from ' + notedCount + ' noted / ' + sessionCount + ' saved sessions';
+    }
+
+    function refreshNotesExportPreview() {
+        const output = document.querySelector('[data-notes-export-output="true"]');
+        const count = document.querySelector('[data-notes-export-count="true"]');
+        const rendered = document.querySelector('[data-notes-export-rendered="true"]');
+
+        if (!output && !count && !rendered) {
+            return;
+        }
+
+        const sessions = getCurrentNoteSessions();
+        const notedCount = sessions.filter(function (session) {
+            return getSessionNotes(session).trim() !== '';
+        }).length;
+        const markdown = buildNotesMarkdown(sessions);
+
+        if (output) {
+            output.value = markdown;
+            output.rows = notedCount ? 8 : 3;
+        }
+
+        if (rendered) {
+            renderMarkdownPreview(markdown, rendered);
+        }
+
+        if (count) {
+            count.textContent = getNotesExportCountText(notedCount, sessions.length);
+        }
+    }
+
+    function renderMarkdownPreview(markdown, container) {
+        const fragment = document.createDocumentFragment();
+        const lines = String(markdown || '').split('\n');
+        let list = null;
+        let paragraph = [];
+
+        function flushParagraph() {
+            if (!paragraph.length) {
+                return;
+            }
+
+            const node = element('p');
+            appendInlineMarkdown(node, paragraph.join(' '));
+            fragment.append(node);
+            paragraph = [];
+        }
+
+        function flushList() {
+            if (list) {
+                fragment.append(list);
+                list = null;
+            }
+        }
+
+        lines.forEach(function (line) {
+            const value = line.trim();
+            const heading = value.match(/^(#{1,3})\s+(.+)$/);
+            const listItem = value.match(/^[-*]\s+(.+)$/);
+
+            if (!value) {
+                flushParagraph();
+                flushList();
+                return;
+            }
+
+            if (heading) {
+                flushParagraph();
+                flushList();
+                const level = Math.min(heading[1].length, 3);
+                const node = element('h' + level);
+                appendInlineMarkdown(node, heading[2]);
+                fragment.append(node);
+                return;
+            }
+
+            if (listItem) {
+                flushParagraph();
+                if (!list) {
+                    list = element('ul');
+                }
+                const item = element('li');
+                appendInlineMarkdown(item, listItem[1]);
+                list.append(item);
+                return;
+            }
+
+            flushList();
+            paragraph.push(value);
+        });
+
+        flushParagraph();
+        flushList();
+        container.replaceChildren(fragment);
+    }
+
+    function appendInlineMarkdown(container, text) {
+        const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\[[^\]]+\]\([^)]+\))/g;
+        let lastIndex = 0;
+        let match;
+
+        while ((match = pattern.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                container.append(document.createTextNode(text.slice(lastIndex, match.index)));
+            }
+
+            const token = match[0];
+            const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+
+            if (token.indexOf('**') === 0) {
+                container.append(element('strong', { text: token.slice(2, -2) }));
+            } else if (token.indexOf('_') === 0) {
+                container.append(element('em', { text: token.slice(1, -1) }));
+            } else if (link) {
+                container.append(element('a', {
+                    href: getSafeMarkdownUrl(link[2]),
+                    rel: 'noopener noreferrer',
+                    target: '_blank',
+                    text: link[1],
+                }));
+            }
+
+            lastIndex = pattern.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            container.append(document.createTextNode(text.slice(lastIndex)));
+        }
+    }
+
+    function getSafeMarkdownUrl(url) {
+        const value = String(url || '').trim();
+
+        if (/^(https?:|mailto:)/i.test(value)) {
+            return value;
+        }
+
+        return '#';
     }
 
     function renderNotesPage() {
@@ -1455,11 +1627,7 @@
             state.selectedEventUrl = events[0].event_url;
         }
 
-        const selectedPlan = getSelectedPlan();
-        const savedPosts = selectedPlan && Array.isArray(selectedPlan.saved_sessions) ? selectedPlan.saved_sessions : [];
-        const sessions = savedPosts.map(savedSessionPostToSession).filter(function (session) {
-            return session.id && session.start;
-        }).sort(compareSessions);
+        const sessions = getCurrentNoteSessions();
 
         if (!sessions.length) {
             nodes.schedule.append(element('div', {
@@ -2650,34 +2818,213 @@
             'aria-label': 'Notes for ' + (session.title || 'session'),
         });
         const actions = element('div', { className: 'wcc-note-actions' });
-        const saveButton = element('button', {
-            className: 'wcc-button wcc-note-save',
-            type: 'button',
-            text: state.savingNotePostId === postId ? 'Saving...' : 'Save note',
+        const status = element('span', {
+            className: 'wcc-note-autosave-status',
+            'data-note-post-id': String(postId),
+            text: getNoteAutosaveStatusText(postId, value, persistedValue),
         });
+        const toolbar = renderNoteMarkdownToolbar(textarea, postId, persistedValue, status);
 
         if (value || Object.prototype.hasOwnProperty.call(state.noteDrafts, postId)) {
             details.open = true;
         }
 
         textarea.value = value;
+        autoResizeNoteTextarea(textarea);
         textarea.addEventListener('input', function () {
-            state.noteDrafts[postId] = textarea.value;
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+        });
+        textarea.addEventListener('keydown', function (event) {
+            handleNoteEditorKeydown(event, textarea, postId, persistedValue, status);
         });
 
-        saveButton.disabled = state.savingNotePostId !== null;
-        saveButton.addEventListener('click', function () {
-            saveSessionNotes(postId, textarea.value);
-        });
-
-        actions.append(saveButton);
+        actions.append(status);
         details.append(
             element('summary', { text: persistedValue || value ? 'Notes' : 'Add notes' }),
+            toolbar,
             textarea,
             actions
         );
 
         return details;
+    }
+
+    function renderNoteMarkdownToolbar(textarea, postId, persistedValue, status) {
+        const toolbar = element('div', {
+            className: 'wcc-note-toolbar',
+            'aria-label': 'Markdown formatting controls',
+        });
+        const controls = [
+            { label: 'B', title: 'Bold', marker: '**', sample: 'bold text' },
+            { label: 'I', title: 'Italic', marker: '_', sample: 'italic text' },
+            { label: 'List', title: 'Bulleted list', list: true },
+            { label: 'Link', title: 'Link', link: true },
+        ];
+
+        controls.forEach(function (control) {
+            const button = element('button', {
+                className: 'wcc-note-tool',
+                type: 'button',
+                title: control.title,
+                text: control.label,
+            });
+
+            button.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+            });
+            button.addEventListener('click', function () {
+                applyNoteMarkdownControl(textarea, control, postId, persistedValue, status);
+            });
+            toolbar.append(button);
+        });
+
+        return toolbar;
+    }
+
+    function applyNoteMarkdownControl(textarea, control, postId, persistedValue, status) {
+        textarea.focus();
+        let changed = true;
+
+        if (control.list) {
+            insertNoteListMarkdown(textarea);
+        } else if (control.link) {
+            changed = insertNoteLinkMarkdown(textarea);
+        } else {
+            wrapNoteSelection(textarea, control.marker, control.marker, control.sample);
+        }
+
+        if (changed) {
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+        }
+    }
+
+    function handleNoteEditorInput(textarea, postId, persistedValue, status) {
+        autoResizeNoteTextarea(textarea);
+        state.noteDrafts[postId] = textarea.value;
+        state.noteAutosaveStatus[postId] = 'unsaved';
+        status.textContent = getNoteAutosaveStatusText(postId, textarea.value, persistedValue);
+        refreshNotesExportPreview();
+        queueSessionNotesAutosave(postId, textarea.value);
+    }
+
+    function handleNoteEditorKeydown(event, textarea, postId, persistedValue, status) {
+        if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'b') {
+            event.preventDefault();
+            wrapNoteSelection(textarea, '**', '**', 'bold text');
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            return;
+        }
+
+        if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'i') {
+            event.preventDefault();
+            wrapNoteSelection(textarea, '_', '_', 'italic text');
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            return;
+        }
+
+        if (event.key === 'Enter' && continueNoteList(textarea)) {
+            event.preventDefault();
+            handleNoteEditorInput(textarea, postId, persistedValue, status);
+        }
+    }
+
+    function wrapNoteSelection(textarea, prefix, suffix, fallback) {
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const selected = textarea.value.slice(start, end) || fallback;
+        const inserted = prefix + selected + suffix;
+
+        replaceNoteSelection(textarea, inserted, start, end);
+        textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }
+
+    function insertNoteListMarkdown(textarea) {
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const selected = textarea.value.slice(start, end);
+        const inserted = selected
+            ? selected.split('\n').map(function (line) {
+                return line.trim() ? '- ' + line.replace(/^[-*]\s+/, '') : line;
+            }).join('\n')
+            : '- ';
+
+        replaceNoteSelection(textarea, inserted, start, end);
+        textarea.setSelectionRange(start + inserted.length, start + inserted.length);
+    }
+
+    function insertNoteLinkMarkdown(textarea) {
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const selected = textarea.value.slice(start, end) || 'link text';
+        const url = window.prompt('Link URL', 'https://');
+
+        if (!url) {
+            return false;
+        }
+
+        const inserted = '[' + selected + '](' + url + ')';
+        replaceNoteSelection(textarea, inserted, start, end);
+        textarea.setSelectionRange(start + 1, start + 1 + selected.length);
+        return true;
+    }
+
+    function continueNoteList(textarea) {
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+
+        if (start !== end) {
+            return false;
+        }
+
+        const lineStart = textarea.value.lastIndexOf('\n', start - 1) + 1;
+        const line = textarea.value.slice(lineStart, start);
+        const match = line.match(/^(\s*)[-*]\s(.*)$/);
+
+        if (!match) {
+            return false;
+        }
+
+        if (!match[2].trim()) {
+            textarea.value = textarea.value.slice(0, lineStart) + textarea.value.slice(start);
+            textarea.setSelectionRange(lineStart, lineStart);
+            return true;
+        }
+
+        const inserted = '\n' + match[1] + '- ';
+        replaceNoteSelection(textarea, inserted, start, end);
+        textarea.setSelectionRange(start + inserted.length, start + inserted.length);
+        return true;
+    }
+
+    function replaceNoteSelection(textarea, inserted, start, end) {
+        textarea.value = textarea.value.slice(0, start) + inserted + textarea.value.slice(end);
+    }
+
+    function autoResizeNoteTextarea(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    function getNoteAutosaveStatusText(postId, value, persistedValue) {
+        const status = state.noteAutosaveStatus[postId] || '';
+
+        if (status === 'saving' || state.savingNotePostId === postId) {
+            return 'Saving...';
+        }
+
+        if (status === 'saved') {
+            return 'Saved';
+        }
+
+        if (status === 'error') {
+            return 'Could not save. Will retry when you edit.';
+        }
+
+        if (status === 'unsaved' || value !== persistedValue) {
+            return 'Unsaved changes';
+        }
+
+        return 'Autosaved';
     }
 
     function renderNoteSession(session) {
@@ -2913,6 +3260,7 @@
         getGapGridRowSizes: getGapGridRowSizes,
         renderGapCandidate: renderGapCandidate,
         getGapBoundaryNotices: getGapBoundaryNotices,
+        refreshNotesExportPreview: refreshNotesExportPreview,
         renderSessionNotes: renderSessionNotes,
         renderNoteSession: renderNoteSession,
         renderSession: renderSession,
