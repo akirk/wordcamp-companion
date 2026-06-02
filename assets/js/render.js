@@ -1444,6 +1444,7 @@
             className: 'wcc-notes-export-panel',
             role: 'tabpanel',
         });
+        const activeExportView = state.notesExportView === 'markdown' ? 'markdown' : 'rendered';
         const copyButton = element('button', {
             className: 'wcc-button',
             type: 'button',
@@ -1477,13 +1478,17 @@
         markdownTab.addEventListener('click', function () {
             setNotesExportTab('markdown', renderedTab, markdownTab, renderedPanel, markdownPanel);
         });
+        section.addEventListener('toggle', function () {
+            state.notesExportOpen = section.open;
+        });
 
+        section.open = Boolean(state.notesExportOpen);
         tabs.append(renderedTab, markdownTab);
         actions.append(copyButton, downloadButton);
         summary.append(title);
         renderedPanel.append(preview);
         markdownPanel.append(output);
-        markdownPanel.hidden = true;
+        setNotesExportTab(activeExportView, renderedTab, markdownTab, renderedPanel, markdownPanel);
         section.append(
             summary,
             actions,
@@ -1502,6 +1507,7 @@
     function setNotesExportTab(tab, renderedTab, markdownTab, renderedPanel, markdownPanel) {
         const showRendered = tab === 'rendered';
 
+        state.notesExportView = showRendered ? 'rendered' : 'markdown';
         renderedTab.classList.toggle('is-active', showRendered);
         renderedTab.setAttribute('aria-selected', showRendered ? 'true' : 'false');
         markdownTab.classList.toggle('is-active', !showRendered);

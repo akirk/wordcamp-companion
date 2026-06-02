@@ -35,7 +35,7 @@
         WCC.clockTimer = window.setTimeout(function () {
             WCC.clockTimer = null;
             updateDebugPlayback();
-            if (isEditingNotes()) {
+            if (state.page === 'notes' || isEditingNotes()) {
                 renderDebugClock();
             } else {
                 render({ companionInPlace: true });

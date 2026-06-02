@@ -890,6 +890,7 @@ body.has-wcc-modal {
 .wcc-notes-export-header::after {
     content: "";
     flex: 0 0 auto;
+    margin-left: auto;
     width: 9px;
     height: 9px;
     border-color: var(--wcc-primary);
@@ -910,6 +911,7 @@ body.has-wcc-modal {
 .wcc-notes-export-title {
     display: grid;
     gap: 2px;
+    min-width: 0;
 }
 
 .wcc-notes-export-title span {
@@ -927,7 +929,8 @@ body.has-wcc-modal {
     display: inline-flex;
     width: fit-content;
     gap: 2px;
-    margin-bottom: -11px;
+    margin-top: 4px;
+    margin-bottom: -1px;
     padding: 0 8px;
     position: relative;
     z-index: 1;

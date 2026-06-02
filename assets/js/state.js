@@ -30,6 +30,8 @@
         noteAutosaveStatus: {},
         noteDrafts: {},
         notesExportCopied: false,
+        notesExportOpen: false,
+        notesExportView: 'rendered',
         savingSettings: false,
         settingsSaved: false,
         settingsDraft: null,
