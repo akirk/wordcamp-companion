@@ -872,6 +872,7 @@ body.has-wcc-modal {
 .wcc-notes-export {
     display: grid;
     gap: 10px;
+    margin-bottom: 14px;
     padding: 14px;
     background: var(--wcc-surface);
     border: 1px solid var(--wcc-border);
