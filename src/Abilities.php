@@ -542,9 +542,6 @@ class Abilities {
             $saved_sessions[] = $this->saved_session_from_session( absint( $post_id ), $event_url, $term_id, $session );
         }
 
-        $fresh_repository = new PlannerRepository( $this->api );
-        $updated_plan = $fresh_repository->get_plan( $user_id );
-
         return [
             'event_url'              => $event_url,
             'saved'                  => $created,
@@ -552,7 +549,13 @@ class Abilities {
             'unresolved_session_ids' => $unresolved_session_ids,
             'failed'                 => $failed,
             'conflicts'              => $this->get_conflicts( $saved_sessions ),
-            'plan'                   => $updated_plan,
+            'summary'                => [
+                'saved_count'          => count( $created ),
+                'already_saved_count'  => count( $already_saved ),
+                'unresolved_count'     => count( $unresolved_session_ids ),
+                'failed_count'         => count( $failed ),
+                'total_saved_sessions' => count( $saved_sessions ),
+            ],
         ];
     }
 
