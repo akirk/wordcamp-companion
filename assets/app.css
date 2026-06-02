@@ -886,6 +886,22 @@ body.has-wcc-modal {
     cursor: pointer;
 }
 
+.wcc-notes-export-header::after {
+    content: "Show export";
+    flex: 0 0 auto;
+    padding: 4px 9px;
+    color: var(--wcc-primary);
+    background: var(--wcc-surface-alt);
+    border: 1px solid var(--wcc-border);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 750;
+}
+
+.wcc-notes-export[open] .wcc-notes-export-header::after {
+    content: "Hide export";
+}
+
 .wcc-notes-export-header::marker {
     color: var(--wcc-primary);
 }
