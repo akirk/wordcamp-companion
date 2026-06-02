@@ -887,19 +887,19 @@ body.has-wcc-modal {
 }
 
 .wcc-notes-export-header::after {
-    content: "Show export";
+    content: "";
     flex: 0 0 auto;
-    padding: 4px 9px;
-    color: var(--wcc-primary);
-    background: var(--wcc-surface-alt);
-    border: 1px solid var(--wcc-border);
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 750;
+    width: 9px;
+    height: 9px;
+    border-color: var(--wcc-primary);
+    border-style: solid;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    transition: transform 0.16s ease;
 }
 
 .wcc-notes-export[open] .wcc-notes-export-header::after {
-    content: "Hide export";
+    transform: rotate(225deg);
 }
 
 .wcc-notes-export-header::marker {
