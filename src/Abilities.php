@@ -693,6 +693,21 @@ class Abilities {
             return $event_url;
         }
 
+        $plan = is_array( $plan ) ? $plan : $this->repository->get_plan( get_current_user_id() );
+        $wordcamp_term_id = isset( $input['wordcamp_term_id'] ) ? absint( $input['wordcamp_term_id'] ) : 0;
+        if ( $wordcamp_term_id ) {
+            $event_url = $this->get_event_url_from_plan_term_id( $plan, $wordcamp_term_id );
+            if ( '' !== $event_url ) {
+                return $event_url;
+            }
+
+            return new WP_Error(
+                'wordcamp_companion_wordcamp_term_not_found',
+                __( 'WordCamp wordcamp_term_id was not found in the current user\'s plans.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
         $event_id = isset( $input['event_id'] ) ? absint( $input['event_id'] ) : 0;
         if ( $event_id ) {
             $event = $this->get_wordcamp_by_id( $event_id, ! empty( $input['refresh'] ) );
@@ -711,7 +726,6 @@ class Abilities {
             );
         }
 
-        $plan = is_array( $plan ) ? $plan : $this->repository->get_plan( get_current_user_id() );
         $event_url = isset( $plan['selected_event_url'] ) ? $this->api->normalize_event_site_url( (string) $plan['selected_event_url'] ) : '';
         if ( '' !== $event_url ) {
             return $event_url;
@@ -722,6 +736,26 @@ class Abilities {
             __( 'Select a WordCamp or provide event_url.', 'wordcamp-companion' ),
             [ 'status' => 400 ]
         );
+    }
+
+    private function get_event_url_from_plan_term_id( array $plan, int $wordcamp_term_id ): string {
+        $plans = isset( $plan['plans'] ) && is_array( $plan['plans'] ) ? $plan['plans'] : [];
+        foreach ( $plans as $event_url => $event_plan ) {
+            if ( ! is_array( $event_plan ) || $wordcamp_term_id !== absint( $event_plan['wordcamp_term_id'] ?? 0 ) ) {
+                continue;
+            }
+
+            $candidate_url = $this->api->normalize_event_site_url( (string) $event_url );
+            if ( '' !== $candidate_url ) {
+                return $candidate_url;
+            }
+
+            if ( isset( $event_plan['event'] ) && is_array( $event_plan['event'] ) && ! empty( $event_plan['event']['event_url'] ) ) {
+                return $this->api->normalize_event_site_url( (string) $event_plan['event']['event_url'] );
+            }
+        }
+
+        return '';
     }
 
     private function get_wordcamp_by_id( int $event_id, bool $force_refresh = false ) {
@@ -1281,6 +1315,10 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to target a specific planned WordCamp.',
+                ],
                 'event_id' => [
                     'type'        => 'integer',
                     'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
@@ -1336,6 +1374,10 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to analyze a specific planned WordCamp.',
+                ],
                 'event_id' => [
                     'type'        => 'integer',
                     'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
@@ -1362,6 +1404,10 @@ class Abilities {
                 'event_url' => [
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
+                ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to target a specific planned WordCamp.',
                 ],
                 'event_id' => [
                     'type'        => 'integer',
@@ -1444,6 +1490,10 @@ class Abilities {
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
                 ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to save sessions to a specific planned WordCamp.',
+                ],
                 'event_id' => [
                     'type'        => 'integer',
                     'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
@@ -1472,6 +1522,10 @@ class Abilities {
                 'event_url' => [
                     'type'        => 'string',
                     'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
+                ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to remove sessions from a specific planned WordCamp.',
                 ],
                 'event_id' => [
                     'type'        => 'integer',
