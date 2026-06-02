@@ -1417,6 +1417,33 @@
             'data-notes-export-rendered': 'true',
             'aria-label': 'Rendered preview of your exported notes',
         });
+        const tabs = element('div', {
+            className: 'wcc-notes-export-tabs',
+            role: 'tablist',
+            'aria-label': 'Markdown export views',
+        });
+        const renderedTab = element('button', {
+            className: 'wcc-notes-export-tab is-active',
+            type: 'button',
+            role: 'tab',
+            'aria-selected': 'true',
+            text: 'Rendered',
+        });
+        const markdownTab = element('button', {
+            className: 'wcc-notes-export-tab',
+            type: 'button',
+            role: 'tab',
+            'aria-selected': 'false',
+            text: 'Markdown',
+        });
+        const renderedPanel = element('div', {
+            className: 'wcc-notes-export-panel',
+            role: 'tabpanel',
+        });
+        const markdownPanel = element('div', {
+            className: 'wcc-notes-export-panel',
+            role: 'tabpanel',
+        });
         const copyButton = element('button', {
             className: 'wcc-button',
             type: 'button',
@@ -1444,9 +1471,19 @@
         downloadButton.addEventListener('click', function () {
             downloadNotesMarkdown(buildNotesMarkdown(getCurrentNoteSessions()));
         });
+        renderedTab.addEventListener('click', function () {
+            setNotesExportTab('rendered', renderedTab, markdownTab, renderedPanel, markdownPanel);
+        });
+        markdownTab.addEventListener('click', function () {
+            setNotesExportTab('markdown', renderedTab, markdownTab, renderedPanel, markdownPanel);
+        });
 
+        tabs.append(renderedTab, markdownTab);
         actions.append(copyButton, downloadButton);
         summary.append(title);
+        renderedPanel.append(preview);
+        markdownPanel.append(output);
+        markdownPanel.hidden = true;
         section.append(
             summary,
             actions,
@@ -1454,13 +1491,23 @@
                 className: 'wcc-notes-export-help',
                 text: 'This read-only preview is built from the individual session notes below. Edit a session note to update the export automatically.',
             }),
-            element('div', { className: 'wcc-notes-rendered-label', text: 'Rendered preview' }),
-            preview,
-            element('div', { className: 'wcc-notes-markdown-label', text: 'Markdown source' }),
-            output
+            tabs,
+            renderedPanel,
+            markdownPanel
         );
 
         return section;
+    }
+
+    function setNotesExportTab(tab, renderedTab, markdownTab, renderedPanel, markdownPanel) {
+        const showRendered = tab === 'rendered';
+
+        renderedTab.classList.toggle('is-active', showRendered);
+        renderedTab.setAttribute('aria-selected', showRendered ? 'true' : 'false');
+        markdownTab.classList.toggle('is-active', !showRendered);
+        markdownTab.setAttribute('aria-selected', showRendered ? 'false' : 'true');
+        renderedPanel.hidden = !showRendered;
+        markdownPanel.hidden = showRendered;
     }
 
     function getCurrentNoteSessions() {
