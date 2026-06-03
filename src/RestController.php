@@ -668,10 +668,10 @@ class RestController {
             }
         }
 
-        return $this->compact_days( $first_sessions_by_day, $last_sessions_by_day );
+        return $this->compact_days( $first_sessions_by_day, $last_sessions_by_day, $timezone );
     }
 
-    private function compact_days( array $first_sessions_by_day, array $last_sessions_by_day ): array {
+    private function compact_days( array $first_sessions_by_day, array $last_sessions_by_day, string $timezone = '' ): array {
         $days = [];
 
         foreach ( $first_sessions_by_day as $day_key => $session ) {
@@ -679,10 +679,15 @@ class RestController {
                 continue;
             }
 
+            $start = absint( $session['start'] );
+            $end = isset( $last_sessions_by_day[ $day_key ]['end'] ) ? absint( $last_sessions_by_day[ $day_key ]['end'] ) : $start;
             $days[ $day_key ] = [
-                'key'   => $day_key,
-                'start' => absint( $session['start'] ),
-                'end'   => isset( $last_sessions_by_day[ $day_key ]['end'] ) ? absint( $last_sessions_by_day[ $day_key ]['end'] ) : absint( $session['start'] ),
+                'key'         => $day_key,
+                'start'       => $start,
+                'start_local' => $this->format_local_datetime( $start, $timezone ),
+                'end'         => $end,
+                'end_local'   => $this->format_local_datetime( $end, $timezone ),
+                'time_range'  => $this->format_local_time_range( $start, $end, $timezone ),
             ];
         }
 
@@ -755,6 +760,47 @@ class RestController {
             return $date->format( 'Y-m-d' );
         } catch ( \Exception $exception ) {
             return gmdate( 'Y-m-d', $timestamp );
+        }
+    }
+
+    private function format_local_datetime( ?int $timestamp, string $timezone ): string {
+        if ( ! $timestamp ) {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable( '@' . $timestamp );
+            $date = $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            return $date->format( 'Y-m-d g:i A T' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d g:i A \U\T\C', $timestamp );
+        }
+    }
+
+    private function format_local_time_range( ?int $start, ?int $end, string $timezone ): string {
+        if ( ! $start ) {
+            return '';
+        }
+
+        try {
+            $start_date = new \DateTimeImmutable( '@' . $start );
+            $start_date = $start_date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            if ( ! $end ) {
+                return $start_date->format( 'g:i A T' );
+            }
+
+            $end_date = new \DateTimeImmutable( '@' . $end );
+            $end_date = $end_date->setTimezone( $start_date->getTimezone() );
+
+            return $start_date->format( 'g:i A' ) . ' - ' . $end_date->format( 'g:i A T' );
+        } catch ( \Exception $exception ) {
+            if ( ! $end ) {
+                return gmdate( 'g:i A \U\T\C', $start );
+            }
+
+            return gmdate( 'g:i A', $start ) . ' - ' . gmdate( 'g:i A \U\T\C', $end );
         }
     }
 

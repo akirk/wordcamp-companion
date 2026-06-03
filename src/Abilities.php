@@ -314,6 +314,12 @@ class Abilities {
         $this->repository->store_schedule_metadata( $event_url, $schedule, $schedule['days'] );
         $total_sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? count( $schedule['sessions'] ) : 0;
         $day_key = $this->get_day_key_from_input( $input );
+        $search = isset( $input['search'] ) ? sanitize_text_field( (string) $input['search'] ) : '';
+        $search_day_key = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $search ) ? $search : '';
+        if ( '' === $day_key && '' !== $search_day_key ) {
+            $day_key = $search_day_key;
+        }
+
         if ( '' !== $day_key ) {
             $timezone = isset( $schedule['timezone'] ) ? sanitize_text_field( (string) $schedule['timezone'] ) : '';
             $schedule['sessions'] = array_values(
@@ -327,20 +333,24 @@ class Abilities {
             $schedule['day_filter'] = $day_key;
         }
 
-        $search = isset( $input['search'] ) ? sanitize_text_field( (string) $input['search'] ) : '';
-        if ( '' !== $search ) {
+        $text_search = '' !== $search && '' === $search_day_key ? $search : '';
+        if ( '' !== $text_search ) {
             $schedule['sessions'] = array_values(
                 array_filter(
                     isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [],
-                    function ( array $session ) use ( $search ): bool {
-                        return $this->session_matches_search( $session, $search );
+                    function ( array $session ) use ( $text_search ): bool {
+                        return $this->session_matches_search( $session, $text_search );
                     }
                 )
             );
+        }
+
+        if ( '' !== $search ) {
             $schedule['search_filter'] = $search;
         }
 
         if ( '' !== $day_key || '' !== $search ) {
+            $schedule = $this->filter_schedule_related_data( $schedule );
             $schedule['filters'] = [
                 'day_key' => $day_key,
                 'search'  => $search,
@@ -350,6 +360,59 @@ class Abilities {
         }
 
         return $schedule;
+    }
+
+    private function filter_schedule_related_data( array $schedule ): array {
+        $sessions = isset( $schedule['sessions'] ) && is_array( $schedule['sessions'] ) ? $schedule['sessions'] : [];
+
+        $schedule['speakers'] = $this->filter_items_by_ids(
+            isset( $schedule['speakers'] ) && is_array( $schedule['speakers'] ) ? $schedule['speakers'] : [],
+            $this->collect_session_ids( $sessions, 'speaker_ids' )
+        );
+        $schedule['tracks'] = $this->filter_items_by_ids(
+            isset( $schedule['tracks'] ) && is_array( $schedule['tracks'] ) ? $schedule['tracks'] : [],
+            $this->collect_session_ids( $sessions, 'track_ids' )
+        );
+        $schedule['categories'] = $this->filter_items_by_ids(
+            isset( $schedule['categories'] ) && is_array( $schedule['categories'] ) ? $schedule['categories'] : [],
+            $this->collect_session_ids( $sessions, 'category_ids' )
+        );
+
+        return $schedule;
+    }
+
+    private function filter_items_by_ids( array $items, array $ids ): array {
+        if ( empty( $items ) || empty( $ids ) ) {
+            return [];
+        }
+
+        return array_values(
+            array_filter(
+                $items,
+                function ( array $item ) use ( $ids ): bool {
+                    return ! empty( $item['id'] ) && isset( $ids[ absint( $item['id'] ) ] );
+                }
+            )
+        );
+    }
+
+    private function collect_session_ids( array $sessions, string $field ): array {
+        $ids = [];
+
+        foreach ( $sessions as $session ) {
+            if ( ! is_array( $session ) || empty( $session[ $field ] ) || ! is_array( $session[ $field ] ) ) {
+                continue;
+            }
+
+            foreach ( $session[ $field ] as $id ) {
+                $id = absint( $id );
+                if ( $id ) {
+                    $ids[ $id ] = true;
+                }
+            }
+        }
+
+        return $ids;
     }
 
     public function analyze_plan( $input ) {
@@ -972,6 +1035,14 @@ class Abilities {
 
         ksort( $days );
 
+        foreach ( $days as $day_key => $day ) {
+            $start = absint( $day['start'] ?? 0 );
+            $end = absint( $day['end'] ?? $start );
+            $days[ $day_key ]['start_local'] = $this->format_local_datetime( $start, $timezone );
+            $days[ $day_key ]['end_local'] = $this->format_local_datetime( $end, $timezone );
+            $days[ $day_key ]['time_range'] = $this->format_local_time_range( $start, $end, $timezone );
+        }
+
         return $days;
     }
 
@@ -986,6 +1057,47 @@ class Abilities {
             return $date->format( 'Y-m-d' );
         } catch ( \Exception $exception ) {
             return gmdate( 'Y-m-d', $timestamp );
+        }
+    }
+
+    private function format_local_datetime( ?int $timestamp, string $timezone ): string {
+        if ( ! $timestamp ) {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable( '@' . $timestamp );
+            $date = $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            return $date->format( 'Y-m-d g:i A T' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d g:i A \U\T\C', $timestamp );
+        }
+    }
+
+    private function format_local_time_range( ?int $start, ?int $end, string $timezone ): string {
+        if ( ! $start ) {
+            return '';
+        }
+
+        try {
+            $start_date = new \DateTimeImmutable( '@' . $start );
+            $start_date = $start_date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            if ( ! $end ) {
+                return $start_date->format( 'g:i A T' );
+            }
+
+            $end_date = new \DateTimeImmutable( '@' . $end );
+            $end_date = $end_date->setTimezone( $start_date->getTimezone() );
+
+            return $start_date->format( 'g:i A' ) . ' - ' . $end_date->format( 'g:i A T' );
+        } catch ( \Exception $exception ) {
+            if ( ! $end ) {
+                return gmdate( 'g:i A \U\T\C', $start );
+            }
+
+            return gmdate( 'g:i A', $start ) . ' - ' . gmdate( 'g:i A \U\T\C', $end );
         }
     }
 
@@ -1381,7 +1493,7 @@ class Abilities {
                 ],
                 'search' => [
                     'type'        => 'string',
-                    'description' => 'Optional text to match against session title, description, speaker, track, category, or slug.',
+                    'description' => 'Optional text to match against session title, description, speaker, track, category, or slug. A YYYY-MM-DD value is treated as a schedule day filter.',
                 ],
                 'refresh' => [
                     'type'        => 'boolean',

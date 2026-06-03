@@ -613,9 +613,12 @@ class PlannerRepository {
             }
 
             $sanitized[ $day_key ] = [
-                'key'   => $day_key,
-                'start' => $start,
-                'end'   => $end ?: $start,
+                'key'         => $day_key,
+                'start'       => $start,
+                'start_local' => isset( $day['start_local'] ) ? sanitize_text_field( (string) $day['start_local'] ) : '',
+                'end'         => $end ?: $start,
+                'end_local'   => isset( $day['end_local'] ) ? sanitize_text_field( (string) $day['end_local'] ) : '',
+                'time_range'  => isset( $day['time_range'] ) ? sanitize_text_field( (string) $day['time_range'] ) : '',
             ];
         }
 
