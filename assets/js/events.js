@@ -666,8 +666,18 @@
                     throw new Error('Session details were not found.');
                 }
 
-                const createdPost = await createSavedSessionPost(localSession);
-                addSavedSessionPost(normalizeSavedSessionPost(createdPost, localSession));
+                const pendingRestore = state.pendingDeletedSessionUndo &&
+                    state.pendingDeletedSessionUndo.eventUrl === state.selectedEventUrl &&
+                    Number(state.pendingDeletedSessionUndo.sessionId) === Number(sessionId)
+                    ? state.pendingDeletedSessionUndo
+                    : null;
+                const sessionToSave = pendingRestore && pendingRestore.session
+                    ? Object.assign({}, localSession, pendingRestore.session, {
+                        notes: getSessionNotes(pendingRestore.session) || pendingRestore.session.notes || localSession.notes || '',
+                    })
+                    : localSession;
+                const createdPost = await createSavedSessionPost(sessionToSave);
+                addSavedSessionPost(normalizeSavedSessionPost(createdPost, sessionToSave));
                 if (
                     state.pendingDeletedSessionUndo &&
                     Number(state.pendingDeletedSessionUndo.sessionId) === Number(sessionId)
@@ -683,6 +693,7 @@
                 state.openGapKey = '';
                 resetCompanionAnimationState();
             }
+            refreshNotesExportPreview();
         } catch (error) {
             state.alert = getErrorAlert(error);
         } finally {

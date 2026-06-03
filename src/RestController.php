@@ -308,6 +308,7 @@ class RestController {
             $update_result = wp_update_post(
                 [
                     'ID'         => $post_id,
+                    'post_status' => 'publish',
                     'post_title' => $title,
                 ],
                 true
@@ -366,6 +367,24 @@ class RestController {
     }
 
     private function find_trashed_saved_session_post_id( int $user_id, int $term_id, int $session_id, string $event_url ): int {
+        $event_urls = array_values(
+            array_unique(
+                array_filter(
+                    [
+                        esc_url_raw( $event_url ),
+                        esc_url_raw( trailingslashit( $event_url ) ),
+                        esc_url_raw( untrailingslashit( $event_url ) ),
+                    ]
+                )
+            )
+        );
+
+        $event_url_query = [
+            'key'     => 'wcc_event_url',
+            'value'   => $event_urls,
+            'compare' => 'IN',
+        ];
+
         $query = new WP_Query(
             [
                 'post_type'      => PlannerRepository::POST_TYPE,
@@ -382,13 +401,13 @@ class RestController {
                         'type'  => 'NUMERIC',
                     ],
                     [
-                        'key'   => 'wcc_wordcamp_term_id',
-                        'value' => $term_id,
-                        'type'  => 'NUMERIC',
-                    ],
-                    [
-                        'key'   => 'wcc_event_url',
-                        'value' => $event_url,
+                        'relation' => 'OR',
+                        [
+                            'key'   => 'wcc_wordcamp_term_id',
+                            'value' => $term_id,
+                            'type'  => 'NUMERIC',
+                        ],
+                        $event_url_query,
                     ],
                 ],
             ]
