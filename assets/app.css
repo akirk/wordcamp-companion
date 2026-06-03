@@ -2088,7 +2088,7 @@ body.has-wcc-modal {
     }
 
     .wcc-notes-header-side {
-        justify-content: flex-start;
+        display: none;
     }
 
     .wcc-setting-row,
