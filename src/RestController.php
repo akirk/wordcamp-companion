@@ -3,6 +3,7 @@
 namespace WordCampCompanion;
 
 use WP_Error;
+use WP_Query;
 use WP_REST_Request;
 
 defined( 'ABSPATH' ) || exit;
@@ -144,6 +145,18 @@ class RestController {
 
         register_rest_route(
             self::NAMESPACE,
+            '/sessions',
+            [
+                [
+                    'methods'             => 'POST',
+                    'callback'            => [ $this, 'save_session_post' ],
+                    'permission_callback' => [ $this, 'can_read' ],
+                ],
+            ]
+        );
+
+        register_rest_route(
+            self::NAMESPACE,
             '/settings',
             [
                 [
@@ -252,6 +265,84 @@ class RestController {
         );
     }
 
+    public function save_session_post( WP_REST_Request $request ) {
+        $body = $request->get_json_params();
+        if ( ! is_array( $body ) ) {
+            $body = $request->get_body_params();
+        }
+
+        $meta = isset( $body['meta'] ) && is_array( $body['meta'] ) ? $body['meta'] : [];
+        $session_id = absint( $meta['wcc_session_id'] ?? 0 );
+        $term_id = absint( $meta['wcc_wordcamp_term_id'] ?? 0 );
+        $event_url = esc_url_raw( (string) ( $meta['wcc_event_url'] ?? '' ) );
+        if ( ! $session_id || ! $term_id || '' === $event_url ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_saved_session_meta',
+                __( 'Saved session metadata is incomplete.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        if ( ! term_exists( $term_id, PlannerRepository::TAXONOMY ) ) {
+            return new WP_Error(
+                'wordcamp_companion_invalid_wordcamp_term',
+                __( 'The selected WordCamp was not found.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $user_id = get_current_user_id();
+        $title = $this->get_saved_session_title( $body );
+        $post_id = $this->find_trashed_saved_session_post_id( $user_id, $term_id, $session_id, $event_url );
+        if ( $post_id ) {
+            $restored_post_id = wp_untrash_post( $post_id );
+            if ( ! $restored_post_id ) {
+                return new WP_Error(
+                    'wordcamp_companion_restore_saved_session_failed',
+                    __( 'Saved session could not be restored from trash.', 'wordcamp-companion' ),
+                    [ 'status' => 500 ]
+                );
+            }
+
+            // Keep the saved post title aligned with the current schedule title after restore.
+            $update_result = wp_update_post(
+                [
+                    'ID'         => $post_id,
+                    'post_title' => $title,
+                ],
+                true
+            );
+
+            if ( is_wp_error( $update_result ) ) {
+                return $update_result;
+            }
+
+            $this->update_saved_session_meta( $post_id, $meta, true );
+            wp_set_object_terms( $post_id, [ $term_id ], PlannerRepository::TAXONOMY, false );
+
+            return rest_ensure_response( $this->get_saved_session_rest_response( $post_id ) );
+        }
+
+        $post_id = wp_insert_post(
+            [
+                'post_type'   => PlannerRepository::POST_TYPE,
+                'post_status' => 'publish',
+                'post_author' => $user_id,
+                'post_title'  => $title,
+                'meta_input'  => $this->sanitize_saved_session_meta( $meta, false ),
+            ],
+            true
+        );
+
+        if ( is_wp_error( $post_id ) ) {
+            return $post_id;
+        }
+
+        wp_set_object_terms( absint( $post_id ), [ $term_id ], PlannerRepository::TAXONOMY, false );
+
+        return rest_ensure_response( $this->get_saved_session_rest_response( absint( $post_id ) ) );
+    }
+
     private function get_event_url_from_request( WP_REST_Request $request ): string {
         $event_url = (string) $request->get_param( 'event_url' );
 
@@ -261,6 +352,117 @@ class RestController {
         }
 
         return $event_url;
+    }
+
+    private function get_saved_session_title( array $body ): string {
+        $title = $body['title'] ?? __( 'Untitled session', 'wordcamp-companion' );
+        if ( is_array( $title ) ) {
+            $title = $title['raw'] ?? $title['rendered'] ?? __( 'Untitled session', 'wordcamp-companion' );
+        }
+
+        $title = sanitize_text_field( (string) $title );
+
+        return '' !== $title ? $title : __( 'Untitled session', 'wordcamp-companion' );
+    }
+
+    private function find_trashed_saved_session_post_id( int $user_id, int $term_id, int $session_id, string $event_url ): int {
+        $query = new WP_Query(
+            [
+                'post_type'      => PlannerRepository::POST_TYPE,
+                'post_status'    => 'trash',
+                'author'         => $user_id,
+                'posts_per_page' => 1,
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+                'meta_query'     => [
+                    'relation' => 'AND',
+                    [
+                        'key'   => 'wcc_session_id',
+                        'value' => $session_id,
+                        'type'  => 'NUMERIC',
+                    ],
+                    [
+                        'key'   => 'wcc_wordcamp_term_id',
+                        'value' => $term_id,
+                        'type'  => 'NUMERIC',
+                    ],
+                    [
+                        'key'   => 'wcc_event_url',
+                        'value' => $event_url,
+                    ],
+                ],
+            ]
+        );
+
+        if ( ! empty( $query->posts[0] ) ) {
+            return absint( $query->posts[0] );
+        }
+
+        return 0;
+    }
+
+    private function update_saved_session_meta( int $post_id, array $meta, bool $preserve_existing_notes ): void {
+        foreach ( $this->sanitize_saved_session_meta( $meta, $preserve_existing_notes, $post_id ) as $meta_key => $meta_value ) {
+            update_post_meta( $post_id, $meta_key, $meta_value );
+        }
+    }
+
+    private function sanitize_saved_session_meta( array $meta, bool $preserve_existing_notes, int $post_id = 0 ): array {
+        $notes = isset( $meta['wcc_session_notes'] ) ? sanitize_textarea_field( (string) $meta['wcc_session_notes'] ) : '';
+        if ( $preserve_existing_notes && '' === $notes && $post_id ) {
+            $notes = sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) );
+        }
+
+        return [
+            'wcc_event_url'        => esc_url_raw( (string) ( $meta['wcc_event_url'] ?? '' ) ),
+            'wcc_wordcamp_term_id' => absint( $meta['wcc_wordcamp_term_id'] ?? 0 ),
+            'wcc_session_id'       => absint( $meta['wcc_session_id'] ?? 0 ),
+            'wcc_session_url'      => esc_url_raw( (string) ( $meta['wcc_session_url'] ?? '' ) ),
+            'wcc_session_start'    => absint( $meta['wcc_session_start'] ?? 0 ),
+            'wcc_session_end'      => absint( $meta['wcc_session_end'] ?? 0 ),
+            'wcc_session_duration' => absint( $meta['wcc_session_duration'] ?? 0 ),
+            'wcc_session_type'     => sanitize_key( (string) ( $meta['wcc_session_type'] ?? '' ) ),
+            'wcc_speaker_names'    => sanitize_textarea_field( (string) ( $meta['wcc_speaker_names'] ?? '' ) ),
+            'wcc_speaker_urls'     => sanitize_textarea_field( (string) ( $meta['wcc_speaker_urls'] ?? '' ) ),
+            'wcc_track_names'      => sanitize_textarea_field( (string) ( $meta['wcc_track_names'] ?? '' ) ),
+            'wcc_category_names'   => sanitize_textarea_field( (string) ( $meta['wcc_category_names'] ?? '' ) ),
+            'wcc_session_snapshot' => sanitize_textarea_field( (string) ( $meta['wcc_session_snapshot'] ?? '' ) ),
+            'wcc_session_notes'    => $notes,
+        ];
+    }
+
+    private function get_saved_session_rest_response( int $post_id ): array {
+        $meta = [];
+        foreach (
+            [
+                'wcc_event_url',
+                'wcc_wordcamp_term_id',
+                'wcc_session_id',
+                'wcc_session_url',
+                'wcc_session_start',
+                'wcc_session_end',
+                'wcc_session_duration',
+                'wcc_session_type',
+                'wcc_speaker_names',
+                'wcc_speaker_urls',
+                'wcc_track_names',
+                'wcc_category_names',
+                'wcc_session_snapshot',
+                'wcc_session_notes',
+            ] as $meta_key
+        ) {
+            $meta[ $meta_key ] = get_post_meta( $post_id, $meta_key, true );
+        }
+
+        return [
+            'id'     => $post_id,
+            'status' => get_post_status( $post_id ),
+            'title'  => [
+                'raw'      => get_the_title( $post_id ),
+                'rendered' => get_the_title( $post_id ),
+            ],
+            'meta'   => $meta,
+        ];
     }
 
     private function get_saved_session_ids( array $plan, string $event_url ): array {
