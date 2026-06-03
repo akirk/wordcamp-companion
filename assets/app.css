@@ -981,53 +981,63 @@ body.has-wcc-modal {
 }
 
 .wcc-notes-export-help {
-    margin: 0;
+    margin: 4px 0 8px;
     color: var(--wcc-muted);
-    font-size: 0.9rem;
-}
-
-.wcc-notes-export-tabs {
-    display: inline-flex;
-    width: fit-content;
-    gap: 2px;
-    margin-top: 4px;
-    margin-bottom: 0;
-    padding: 0 8px;
-    position: relative;
-    z-index: 1;
-}
-
-.wcc-notes-export-tab {
-    min-height: 30px;
-    padding: 5px 12px;
-    color: var(--wcc-muted);
-    background: var(--wcc-surface);
-    border: 1px solid transparent;
-    border-radius: 7px 7px 0 0;
-    cursor: pointer;
-    font: inherit;
     font-size: 0.82rem;
-    font-weight: 750;
 }
 
-.wcc-notes-export-tab.is-active {
-    color: var(--wcc-text);
-    background: var(--wcc-surface-alt);
-    border-color: var(--wcc-border);
-    border-bottom-color: var(--wcc-surface-alt);
-}
-
-.wcc-notes-export-panel[hidden] {
-    display: none;
+.wcc-notes-preview-wrap {
+    position: relative;
 }
 
 .wcc-notes-rendered-preview {
     display: grid;
     gap: 8px;
     padding: 12px;
-    background: var(--wcc-surface-alt);
+    background: var(--wcc-surface);
     border: 1px solid var(--wcc-border);
     border-radius: 6px;
+}
+
+.wcc-notes-copy-button {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--wcc-muted);
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.wcc-notes-copy-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+}
+
+.wcc-notes-copy-button:hover,
+.wcc-notes-copy-button:focus-visible {
+    color: var(--wcc-primary);
+    border-color: color-mix(in srgb, var(--wcc-primary), var(--wcc-border) 45%);
+}
+
+.wcc-copy-icon,
+.wcc-download-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+}
+
+.wcc-copy-icon svg,
+.wcc-download-icon svg {
+    display: block;
+    width: 16px;
+    height: 16px;
 }
 
 .wcc-notes-rendered-preview h1,
@@ -1062,7 +1072,59 @@ body.has-wcc-modal {
     gap: 8px;
 }
 
-.wcc-notes-output,
+.wcc-notes-export-action-group {
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid var(--wcc-border);
+    border-radius: 6px;
+}
+
+.wcc-notes-export-action-label,
+.wcc-notes-export-action-button {
+    min-height: 34px;
+    border: 0;
+    border-left: 1px solid var(--wcc-border);
+}
+
+.wcc-notes-export-action-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    color: var(--wcc-muted);
+    background: var(--wcc-surface-alt);
+    font-size: 0.82rem;
+    font-weight: 750;
+}
+
+.wcc-notes-export-action-label:first-child {
+    border-left: 0;
+}
+
+.wcc-notes-export-action-button {
+    display: inline-grid;
+    place-items: center;
+    padding: 0 11px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.wcc-notes-export-action-button.is-icon {
+    width: 34px;
+    padding: 0;
+    color: var(--wcc-muted);
+}
+
+.wcc-notes-export-action-button:hover,
+.wcc-notes-export-action-button:focus-visible {
+    color: var(--wcc-primary);
+    background: color-mix(in srgb, var(--wcc-primary), transparent 94%);
+}
+
 .wcc-note-editor {
     width: 100%;
     min-width: 0;
@@ -1074,11 +1136,6 @@ body.has-wcc-modal {
     font: inherit;
     line-height: 1.45;
     resize: vertical;
-}
-
-.wcc-notes-output {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 0.86rem;
 }
 
 .wcc-companion {

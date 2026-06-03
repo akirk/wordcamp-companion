@@ -445,6 +445,7 @@
 
         state.selectedEventUrl = eventUrl;
         state.notesExportCopied = false;
+        state.notesExportCopiedType = '';
         state.alert = null;
         render();
     }
