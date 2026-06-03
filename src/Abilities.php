@@ -1035,6 +1035,14 @@ class Abilities {
 
         ksort( $days );
 
+        foreach ( $days as $day_key => $day ) {
+            $start = absint( $day['start'] ?? 0 );
+            $end = absint( $day['end'] ?? $start );
+            $days[ $day_key ]['start_local'] = $this->format_local_datetime( $start, $timezone );
+            $days[ $day_key ]['end_local'] = $this->format_local_datetime( $end, $timezone );
+            $days[ $day_key ]['time_range'] = $this->format_local_time_range( $start, $end, $timezone );
+        }
+
         return $days;
     }
 
@@ -1049,6 +1057,47 @@ class Abilities {
             return $date->format( 'Y-m-d' );
         } catch ( \Exception $exception ) {
             return gmdate( 'Y-m-d', $timestamp );
+        }
+    }
+
+    private function format_local_datetime( ?int $timestamp, string $timezone ): string {
+        if ( ! $timestamp ) {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable( '@' . $timestamp );
+            $date = $date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            return $date->format( 'Y-m-d g:i A T' );
+        } catch ( \Exception $exception ) {
+            return gmdate( 'Y-m-d g:i A \U\T\C', $timestamp );
+        }
+    }
+
+    private function format_local_time_range( ?int $start, ?int $end, string $timezone ): string {
+        if ( ! $start ) {
+            return '';
+        }
+
+        try {
+            $start_date = new \DateTimeImmutable( '@' . $start );
+            $start_date = $start_date->setTimezone( new \DateTimeZone( $timezone ?: 'UTC' ) );
+
+            if ( ! $end ) {
+                return $start_date->format( 'g:i A T' );
+            }
+
+            $end_date = new \DateTimeImmutable( '@' . $end );
+            $end_date = $end_date->setTimezone( $start_date->getTimezone() );
+
+            return $start_date->format( 'g:i A' ) . ' - ' . $end_date->format( 'g:i A T' );
+        } catch ( \Exception $exception ) {
+            if ( ! $end ) {
+                return gmdate( 'g:i A \U\T\C', $start );
+            }
+
+            return gmdate( 'g:i A', $start ) . ' - ' . gmdate( 'g:i A \U\T\C', $end );
         }
     }
 
