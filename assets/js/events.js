@@ -612,22 +612,15 @@
                     eventUrl: state.selectedEventUrl,
                     postId: Number(savedPost.post_id || 0),
                     sessionId: Number(sessionId || 0),
+                    title: savedPost.title || 'session',
                     session: Object.assign(
                         {},
                         localSession || savedSession,
                         { notes: savedNotes || savedPost.notes || (localSession && localSession.notes) || '' }
                     ),
                 };
-                state.alert = {
-                    type: 'notice',
-                    message: 'Removed "' + (savedPost.title || 'session') + '" from your schedule.',
-                    actions: [
-                        {
-                            label: 'Undo',
-                            callback: undoDeletedSession,
-                        },
-                    ],
-                };
+                state.alert = null;
+                state.toast = null;
             } else {
                 if (!localSession) {
                     throw new Error('Session details were not found.');
@@ -679,7 +672,8 @@
             const restoredPost = await restoreSavedSessionPost(pending.postId);
             addSavedSessionPost(normalizeSavedSessionPost(restoredPost, pending.session));
             state.pendingDeletedSessionUndo = null;
-            state.alert = { type: 'success', message: 'Session restored.' };
+            state.alert = null;
+            state.toast = { type: 'success', message: 'Session restored.' };
             if (state.schedule && state.schedule.mode === 'companion') {
                 state.schedule = buildLocalCompanionSchedule();
                 state.loadedGapKeys = {};

@@ -198,9 +198,76 @@
             renderEvents();
             renderTabs();
             renderSchedule(options);
+            renderToast();
         } catch (error) {
             renderCompanionRenderError(error);
         }
+    }
+
+    function renderToast() {
+        const existing = document.getElementById('wcc-toast');
+        const pending = state.pendingDeletedSessionUndo;
+        const toastState = pending ? null : state.toast;
+
+        if (existing) {
+            existing.remove();
+        }
+
+        if ((!pending && (!toastState || !toastState.message)) || !nodes.app) {
+            return;
+        }
+
+        const toast = element('div', {
+            id: 'wcc-toast',
+            className: 'wcc-toast' + (toastState && toastState.type === 'success' ? ' is-success' : ''),
+            role: 'status',
+            'aria-live': 'polite',
+        });
+        const message = element('span', {
+            className: 'wcc-toast-message',
+            text: pending
+                ? 'Removed "' + (pending.title || 'session') + '" from your schedule.'
+                : toastState.message,
+        });
+        const dismissButton = element('button', {
+            className: 'wcc-toast-dismiss',
+            type: 'button',
+            text: 'x',
+            title: 'Dismiss',
+            'aria-label': 'Dismiss message',
+        });
+
+        dismissButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (pending) {
+                state.pendingDeletedSessionUndo = null;
+            } else {
+                state.toast = null;
+            }
+            render();
+        });
+
+        toast.append(message);
+
+        if (pending) {
+            const undoButton = element('button', {
+                className: 'wcc-toast-action',
+                type: 'button',
+                text: 'Undo',
+            });
+
+            undoButton.disabled = state.savingSessionId !== null;
+            undoButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                if (typeof WCC.undoDeletedSession === 'function') {
+                    WCC.undoDeletedSession();
+                }
+            });
+            toast.append(undoButton);
+        }
+
+        toast.append(dismissButton);
+        nodes.app.append(toast);
     }
 
     function renderDebugClock() {
@@ -1149,6 +1216,8 @@
                     sessionsToImport.length
                 ),
             };
+            state.toast = state.alert;
+            state.alert = null;
             clearRequestedWccValueFromUrl();
             closeImportScheduleDialog();
         } catch (error) {

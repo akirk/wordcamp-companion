@@ -43,6 +43,7 @@
         debugTimeAdjustmentBaseOffset: null,
         debugLastTick: null,
         alert: null,
+        toast: null,
         shareMode: '',
         shareModeTouched: false,
         importingSharedSchedule: false,
