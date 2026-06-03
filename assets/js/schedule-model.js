@@ -249,7 +249,13 @@
     async function deleteSavedSessionPost(postId) {
         return wpApi((config.savedSessionRestBase || 'wordcamp-companion-sessions') + '/' + Number(postId), {
             method: 'DELETE',
-            query: { force: 'true' },
+        });
+    }
+
+    async function restoreSavedSessionPost(postId) {
+        return wpApi((config.savedSessionRestBase || 'wordcamp-companion-sessions') + '/' + Number(postId), {
+            method: 'POST',
+            body: { status: 'publish' },
         });
     }
 
@@ -1325,6 +1331,7 @@
         mergeLoadedGapCandidates: mergeLoadedGapCandidates,
         createSavedSessionPost: createSavedSessionPost,
         deleteSavedSessionPost: deleteSavedSessionPost,
+        restoreSavedSessionPost: restoreSavedSessionPost,
         buildSavedSessionMeta: buildSavedSessionMeta,
         listToMeta: listToMeta,
         normalizeSavedSessionPost: normalizeSavedSessionPost,

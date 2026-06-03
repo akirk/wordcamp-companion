@@ -208,7 +208,7 @@
                         start: dayEndFromSchedule,
                         end: dayEndFromSchedule + 30 * 60,
                         title: isFinalEmptyDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
-                        detail: isFinalEmptyDay ? 'WordCamp complete.' : 'See you tomorrow.',
+                        detail: isFinalEmptyDay ? 'Hope you had a great WordCamp!' : 'See you tomorrow!',
                         meta: group.label,
                         final: isFinalEmptyDay,
                     });
@@ -265,7 +265,7 @@
                         start: dayEnd,
                         end: dayEnd + 30 * 60,
                         title: isFinalDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
-                        detail: isFinalDay ? 'WordCamp complete.' : 'See you tomorrow.',
+                        detail: isFinalDay ? 'Hope you had a great WordCamp!' : 'See you tomorrow!',
                         meta: group.label,
                         final: isFinalDay,
                     });
@@ -422,7 +422,7 @@
                     start: dayEnd,
                     end: dayEnd + 30 * 60,
                     title: isFinalDay ? 'End of WordCamp' : 'End of Day ' + dayNumber,
-                    detail: isFinalDay ? 'WordCamp complete.' : 'See you tomorrow.',
+                    detail: isFinalDay ? 'Hope you had a great WordCamp!' : 'See you tomorrow!',
                     meta: group.label,
                     final: isFinalDay,
                 });

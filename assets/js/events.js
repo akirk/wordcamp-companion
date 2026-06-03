@@ -47,8 +47,14 @@
     function deleteSavedSessionPost() {
         return WCC.deleteSavedSessionPost.apply(WCC, arguments);
     }
+    function restoreSavedSessionPost() {
+        return WCC.restoreSavedSessionPost.apply(WCC, arguments);
+    }
     function normalizeSavedSessionPost() {
         return WCC.normalizeSavedSessionPost.apply(WCC, arguments);
+    }
+    function savedSessionPostToSession() {
+        return WCC.savedSessionPostToSession.apply(WCC, arguments);
     }
     function findLocalSession() {
         return WCC.findLocalSession.apply(WCC, arguments);
@@ -91,6 +97,9 @@
     }
     function getSavedSessionPost() {
         return WCC.getSavedSessionPost.apply(WCC, arguments);
+    }
+    function getSessionNotes() {
+        return WCC.getSessionNotes.apply(WCC, arguments);
     }
     function updateSavedSessionNotes() {
         return WCC.updateSavedSessionNotes.apply(WCC, arguments);
@@ -579,6 +588,14 @@
         const wasSaved = savedIds.has(sessionId);
         const localSession = findLocalSession(sessionId);
         const savedPost = getSavedSessionPost(sessionId);
+        const savedSession = savedPost ? savedSessionPostToSession(savedPost) : null;
+        const savedNotes = savedSession ? getSessionNotes(savedSession) : '';
+
+        if (wasSaved && savedNotes.trim() && !window.confirm(
+            'This session has notes. Remove it from your schedule anyway? You can still use Undo to restore it.'
+        )) {
+            return;
+        }
 
         state.savingSessionId = sessionId;
         render();
@@ -591,6 +608,19 @@
 
                 await deleteSavedSessionPost(savedPost.post_id);
                 removeSavedSessionPost(sessionId);
+                state.pendingDeletedSessionUndo = {
+                    eventUrl: state.selectedEventUrl,
+                    postId: Number(savedPost.post_id || 0),
+                    sessionId: Number(sessionId || 0),
+                    title: savedPost.title || 'session',
+                    session: Object.assign(
+                        {},
+                        localSession || savedSession,
+                        { notes: savedNotes || savedPost.notes || (localSession && localSession.notes) || '' }
+                    ),
+                };
+                state.alert = null;
+                state.toast = null;
             } else {
                 if (!localSession) {
                     throw new Error('Session details were not found.');
@@ -598,15 +628,59 @@
 
                 const createdPost = await createSavedSessionPost(localSession);
                 addSavedSessionPost(normalizeSavedSessionPost(createdPost, localSession));
+                if (
+                    state.pendingDeletedSessionUndo &&
+                    Number(state.pendingDeletedSessionUndo.sessionId) === Number(sessionId)
+                ) {
+                    state.pendingDeletedSessionUndo = null;
+                }
+                state.alert = null;
             }
 
-            state.alert = null;
             if (state.schedule && state.schedule.mode === 'companion') {
                 state.schedule = buildLocalCompanionSchedule();
                 state.loadedGapKeys = {};
                 state.openGapKey = '';
                 resetCompanionAnimationState();
             }
+        } catch (error) {
+            state.alert = getErrorAlert(error);
+        } finally {
+            state.savingSessionId = null;
+            render();
+        }
+    }
+
+    async function undoDeletedSession() {
+        const pending = state.pendingDeletedSessionUndo;
+
+        if (!pending || !pending.postId || state.savingSessionId) {
+            return;
+        }
+
+        if (pending.eventUrl !== state.selectedEventUrl) {
+            state.pendingDeletedSessionUndo = null;
+            state.alert = { type: 'error', message: 'Switch back to that WordCamp before restoring the session.' };
+            render();
+            return;
+        }
+
+        state.savingSessionId = Number(pending.sessionId || 0);
+        render();
+
+        try {
+            const restoredPost = await restoreSavedSessionPost(pending.postId);
+            addSavedSessionPost(normalizeSavedSessionPost(restoredPost, pending.session));
+            state.pendingDeletedSessionUndo = null;
+            state.alert = null;
+            state.toast = { type: 'success', message: 'Session restored.' };
+            if (state.schedule && state.schedule.mode === 'companion') {
+                state.schedule = buildLocalCompanionSchedule();
+                state.loadedGapKeys = {};
+                state.openGapKey = '';
+                resetCompanionAnimationState();
+            }
+            refreshNotesExportPreview();
         } catch (error) {
             state.alert = getErrorAlert(error);
         } finally {
@@ -721,6 +795,7 @@
         shouldLoadInitialCompanionGaps: shouldLoadInitialCompanionGaps,
         loadInitialCompanionGaps: loadInitialCompanionGaps,
         toggleSession: toggleSession,
+        undoDeletedSession: undoDeletedSession,
         queueSessionNotesAutosave: queueSessionNotesAutosave,
         saveSessionNotes: saveSessionNotes,
         saveSettings: saveSettings

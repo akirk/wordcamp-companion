@@ -198,9 +198,76 @@
             renderEvents();
             renderTabs();
             renderSchedule(options);
+            renderToast();
         } catch (error) {
             renderCompanionRenderError(error);
         }
+    }
+
+    function renderToast() {
+        const existing = document.getElementById('wcc-toast');
+        const pending = state.pendingDeletedSessionUndo;
+        const toastState = pending ? null : state.toast;
+
+        if (existing) {
+            existing.remove();
+        }
+
+        if ((!pending && (!toastState || !toastState.message)) || !nodes.app) {
+            return;
+        }
+
+        const toast = element('div', {
+            id: 'wcc-toast',
+            className: 'wcc-toast' + (toastState && toastState.type === 'success' ? ' is-success' : ''),
+            role: 'status',
+            'aria-live': 'polite',
+        });
+        const message = element('span', {
+            className: 'wcc-toast-message',
+            text: pending
+                ? 'Removed "' + (pending.title || 'session') + '" from your schedule.'
+                : toastState.message,
+        });
+        const dismissButton = element('button', {
+            className: 'wcc-toast-dismiss',
+            type: 'button',
+            text: 'x',
+            title: 'Dismiss',
+            'aria-label': 'Dismiss message',
+        });
+
+        dismissButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (pending) {
+                state.pendingDeletedSessionUndo = null;
+            } else {
+                state.toast = null;
+            }
+            render();
+        });
+
+        toast.append(message);
+
+        if (pending) {
+            const undoButton = element('button', {
+                className: 'wcc-toast-action',
+                type: 'button',
+                text: 'Undo',
+            });
+
+            undoButton.disabled = state.savingSessionId !== null;
+            undoButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                if (typeof WCC.undoDeletedSession === 'function') {
+                    WCC.undoDeletedSession();
+                }
+            });
+            toast.append(undoButton);
+        }
+
+        toast.append(dismissButton);
+        nodes.app.append(toast);
     }
 
     function renderDebugClock() {
@@ -304,7 +371,23 @@
             const actions = element('span', { className: 'wcc-alert-actions' });
 
             state.alert.actions.forEach(function (action) {
-                if (!action || !action.href || !action.label) {
+                if (!action || !action.label || (!action.href && typeof action.callback !== 'function')) {
+                    return;
+                }
+
+                if (typeof action.callback === 'function') {
+                    const button = element('button', {
+                        className: 'wcc-button',
+                        type: 'button',
+                        text: action.label,
+                    });
+
+                    button.disabled = Boolean(action.disabled);
+                    button.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        action.callback();
+                    });
+                    actions.append(button);
                     return;
                 }
 
@@ -1133,6 +1216,8 @@
                     sessionsToImport.length
                 ),
             };
+            state.toast = state.alert;
+            state.alert = null;
             clearRequestedWccValueFromUrl();
             closeImportScheduleDialog();
         } catch (error) {
@@ -1942,7 +2027,7 @@
         if (!visibleSteps.length) {
             nodes.schedule.append(element('div', {
                 className: 'wcc-empty',
-                text: timeline.steps.length ? 'WordCamp complete.' : 'No companion steps.',
+                text: timeline.steps.length ? 'Hope you had a great WordCamp!' : 'No companion steps.',
             }));
             return;
         }

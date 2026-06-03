@@ -657,6 +657,60 @@ body.has-wcc-modal {
     margin-top: 10px;
 }
 
+.wcc-toast {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 10px 12px;
+    color: var(--wcc-text);
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+}
+
+.wcc-toast.is-success {
+    border-color: color-mix(in srgb, var(--wcc-success), var(--wcc-border) 55%);
+}
+
+.wcc-toast-message {
+    min-width: 0;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.wcc-toast-action,
+.wcc-toast-dismiss {
+    flex: 0 0 auto;
+    color: var(--wcc-primary);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 750;
+}
+
+.wcc-toast-dismiss {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: var(--wcc-muted);
+    border-radius: 999px;
+    line-height: 1;
+}
+
+.wcc-toast-action:hover,
+.wcc-toast-dismiss:hover {
+    color: var(--wcc-text);
+}
+
 .wcc-content {
     display: grid;
     grid-template-columns: 310px minmax(0, 1fr);
