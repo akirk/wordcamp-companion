@@ -1871,6 +1871,10 @@ body.has-wcc-modal {
 }
 
 .wcc-note-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-top: 8px;
 }
 
@@ -1878,6 +1882,19 @@ body.has-wcc-modal {
     color: var(--wcc-muted);
     font-size: 0.82rem;
     font-weight: 650;
+}
+
+.wcc-note-page-link {
+    color: var(--wcc-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.wcc-note-page-link:hover,
+.wcc-note-page-link:focus-visible {
+    color: color-mix(in srgb, var(--wcc-primary), var(--wcc-text) 22%);
 }
 
 .wcc-session-notes.is-compact {

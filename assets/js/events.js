@@ -118,16 +118,56 @@
         }
 
         Array.from(document.querySelectorAll('[data-note-post-id="' + postId + '"]')).forEach(function (element) {
-            if (status === 'saving') {
-                element.textContent = 'Saving...';
-            } else if (status === 'saved') {
-                element.textContent = 'Saved';
-            } else if (status === 'error') {
-                element.textContent = 'Could not save. Will retry when you edit.';
-            } else if (status === 'unsaved') {
-                element.textContent = 'Unsaved changes';
-            }
+            updateNoteAutosaveStatusElement(element, postId, getNoteAutosaveStatusTextFromStatus(status));
         });
+        Array.from(document.querySelectorAll('[data-note-page-link-post-id="' + postId + '"]')).forEach(function (element) {
+            updateNotePageLinkElement(element, getNoteAutosaveStatusTextFromStatus(status));
+        });
+    }
+
+    function getNoteAutosaveStatusTextFromStatus(status) {
+        if (status === 'saving') {
+            return 'Saving...';
+        }
+
+        if (status === 'saved') {
+            return 'Saved';
+        }
+
+        if (status === 'error') {
+            return 'Could not save. Will retry when you edit.';
+        }
+
+        if (status === 'unsaved') {
+            return 'Unsaved changes';
+        }
+
+        return '';
+    }
+
+    function getNoteSectionId(postId) {
+        postId = Number(postId || 0);
+
+        return postId ? 'note-' + postId : '';
+    }
+
+    function getNoteSectionUrl(postId) {
+        const sectionId = getNoteSectionId(postId);
+        const baseUrl = config.notesUrl || '#';
+
+        return sectionId ? baseUrl + '#' + sectionId : baseUrl;
+    }
+
+    function updateNoteAutosaveStatusElement(element, postId, text) {
+        const value = String(text || '');
+
+        element.textContent = value;
+    }
+
+    function updateNotePageLinkElement(element, statusText) {
+        const value = String(statusText || '');
+
+        element.hidden = value !== 'Saved';
     }
 
     function queueSessionNotesAutosave(postId, notes) {
@@ -796,6 +836,10 @@
         loadInitialCompanionGaps: loadInitialCompanionGaps,
         toggleSession: toggleSession,
         undoDeletedSession: undoDeletedSession,
+        getNoteSectionId: getNoteSectionId,
+        getNoteSectionUrl: getNoteSectionUrl,
+        updateNoteAutosaveStatusElement: updateNoteAutosaveStatusElement,
+        updateNotePageLinkElement: updateNotePageLinkElement,
         queueSessionNotesAutosave: queueSessionNotesAutosave,
         saveSessionNotes: saveSessionNotes,
         saveSettings: saveSettings
