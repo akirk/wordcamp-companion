@@ -289,7 +289,10 @@ class RestController {
 
     private function get_local_companion_schedule( array $plan, string $event_url ): array {
         $event_plan = isset( $plan['plans'][ $event_url ] ) && is_array( $plan['plans'][ $event_url ] ) ? $plan['plans'][ $event_url ] : [];
-        $event = isset( $event_plan['event'] ) && is_array( $event_plan['event'] ) ? $event_plan['event'] : [ 'event_url' => $event_url ];
+        $event = $this->get_companion_event( $plan, $event_url, false );
+        if ( ! $event ) {
+            $event = isset( $event_plan['event'] ) && is_array( $event_plan['event'] ) ? $event_plan['event'] : [ 'event_url' => $event_url ];
+        }
         $saved_sessions = isset( $event_plan['saved_sessions'] ) && is_array( $event_plan['saved_sessions'] ) ? $event_plan['saved_sessions'] : [];
         $sessions = [];
 
@@ -811,6 +814,18 @@ class RestController {
     public function save_event( WP_REST_Request $request ) {
         $params = $this->get_request_params( $request );
         $event = isset( $params['event'] ) && is_array( $params['event'] ) ? $params['event'] : $params;
+        $event_url = isset( $event['event_url'] ) && is_string( $event['event_url'] )
+            ? $this->api->normalize_event_site_url( $event['event_url'] )
+            : '';
+
+        if ( '' !== $event_url ) {
+            $central_event = $this->api->get_wordcamp_by_event_url( $event_url );
+
+            if ( is_array( $central_event ) && $central_event ) {
+                $event = array_replace_recursive( $event, $central_event );
+            }
+        }
+
         $plan = $this->repository->set_selected_event( get_current_user_id(), $event );
 
         if ( is_wp_error( $plan ) ) {

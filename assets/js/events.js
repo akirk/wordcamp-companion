@@ -227,8 +227,7 @@
 
             if (state.selectedEventUrl && !handledRequestedEvent) {
                 if (state.page === 'companion') {
-                    state.schedule = buildLocalCompanionSchedule();
-                    resetCompanionAnimationState();
+                    await loadSchedule(false, 'companion');
                 } else {
                     await loadSchedule(false, state.view === 'schedule' ? 'full' : 'companion');
                 }
@@ -294,8 +293,7 @@
             }));
             state.pickerOpen = false;
             if (state.view === 'companion') {
-                state.schedule = buildLocalCompanionSchedule();
-                resetCompanionAnimationState();
+                await loadSchedule(false, 'companion');
                 if (shouldLoadInitialCompanionGaps()) {
                     loadInitialCompanionGaps();
                 }
@@ -445,15 +443,6 @@
         }
 
         mode = mode || (state.view === 'schedule' ? 'full' : 'companion');
-        if (mode === 'companion') {
-            state.schedule = buildLocalCompanionSchedule();
-            state.loadedGapKeys = {};
-            state.loadingSchedule = false;
-            state.alert = null;
-            render();
-            return;
-        }
-
         state.loadingSchedule = true;
         state.alert = null;
         const previousSchedule = state.schedule;
