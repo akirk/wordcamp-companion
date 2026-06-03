@@ -53,6 +53,9 @@
     function normalizeSavedSessionPost() {
         return WCC.normalizeSavedSessionPost.apply(WCC, arguments);
     }
+    function savedSessionPostToSession() {
+        return WCC.savedSessionPostToSession.apply(WCC, arguments);
+    }
     function findLocalSession() {
         return WCC.findLocalSession.apply(WCC, arguments);
     }
