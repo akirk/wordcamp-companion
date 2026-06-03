@@ -237,6 +237,10 @@ a:focus-visible {
     color: var(--wcc-muted);
 }
 
+.wcc-current-event:empty {
+    display: none;
+}
+
 .wcc-plan-summary {
     min-width: 180px;
     color: var(--wcc-muted);
@@ -1063,6 +1067,18 @@ body.has-wcc-modal {
 
 .wcc-notes-rendered-preview ul {
     padding-left: 1.25rem;
+}
+
+.wcc-notes-rendered-preview a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+.wcc-notes-rendered-preview a:hover,
+.wcc-notes-rendered-preview a:focus-visible {
+    color: inherit;
 }
 
 .wcc-notes-export-actions,

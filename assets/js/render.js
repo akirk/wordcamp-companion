@@ -3379,6 +3379,7 @@
             textarea,
             actions
         );
+        scheduleNoteTextareaResize(textarea);
 
         return details;
     }
@@ -3585,8 +3586,28 @@
     }
 
     function autoResizeNoteTextarea(textarea) {
+        if (!textarea.isConnected) {
+            scheduleNoteTextareaResize(textarea);
+            return;
+        }
+
         textarea.style.height = 'auto';
         textarea.style.height = textarea.scrollHeight + 'px';
+    }
+
+    function scheduleNoteTextareaResize(textarea) {
+        const resizeWhenConnected = function () {
+            if (textarea.isConnected) {
+                autoResizeNoteTextarea(textarea);
+            }
+        };
+
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(resizeWhenConnected);
+            return;
+        }
+
+        window.setTimeout(resizeWhenConnected, 0);
     }
 
     function getNoteAutosaveStatusText(postId, value, persistedValue) {
