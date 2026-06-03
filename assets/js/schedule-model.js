@@ -12,6 +12,9 @@
     function wpApi() {
         return WCC.wpApi.apply(WCC, arguments);
     }
+    function api() {
+        return WCC.api.apply(WCC, arguments);
+    }
     function getGapKey() {
         return WCC.getGapKey.apply(WCC, arguments);
     }
@@ -240,7 +243,7 @@
             body[taxonomyRestBase] = [termId];
         }
 
-        return wpApi(config.savedSessionRestBase || 'wordcamp-companion-sessions', {
+        return api('sessions', {
             method: 'POST',
             body: body,
         });
