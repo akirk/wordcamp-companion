@@ -22,6 +22,7 @@ class Abilities {
         $this->add_init_safe_action( 'wp_abilities_api_init', 'register_abilities' );
 
         add_filter( 'ai_assistant_ability_domains', [ $this, 'register_ability_domain' ] );
+        add_filter( 'ai_assistant_welcome_tips', [ $this, 'register_welcome_tips' ], 10, 2 );
     }
 
     private function add_init_safe_action( string $hook, string $method ): void {
@@ -250,12 +251,41 @@ class Abilities {
             ]
         );
 
+        wp_register_ability(
+            'wordcamp-companion/save-session-note',
+            [
+                'label'               => __( 'Save Session Note', 'wordcamp-companion' ),
+                'description'         => __( 'Appends or replaces notes for one saved WordCamp session. If no session is specified, targets the currently running saved session when exactly one is active.', 'wordcamp-companion' ),
+                'category'            => 'wordcamp-companion',
+                'input_schema'        => $this->schema_save_session_note_input(),
+                'output_schema'       => $this->schema_open_object(),
+                'execute_callback'    => [ $this, 'save_session_note' ],
+                'permission_callback' => [ $this, 'can_read' ],
+                'meta'                => [
+                    'annotations' => [
+                        'readonly'     => false,
+                        'destructive'  => false,
+                        'instructions' => 'Use this when the user wants to capture notes for a saved session. If the user says they are in a session now and does not identify it, call this without session_id or post_id so the current saved session can be inferred. Append by default; only replace notes when the user explicitly asks to rewrite or replace them.',
+                    ],
+                ],
+            ]
+        );
+
         $this->abilities_registered = true;
     }
 
     public function register_ability_domain( array $domains ): array {
         $domains['wordcamp-companion'] = 'wordcamp, wordcamp companion, conference schedule, sessions, talks, tracks, speakers, notes, companion timeline, plan my day, event itinerary, add sessions, save sessions, remove sessions';
         return $domains;
+    }
+
+    public function register_welcome_tips( array $tips, array $context ): array {
+        $tips['wordcamp-companion'] = [
+            __( 'Ask me to recommend sessions or check your saved plan for conflicts.', 'wordcamp-companion' ),
+            __( 'While a saved session is in progress, write notes here and I can add them to that session.', 'wordcamp-companion' ),
+        ];
+
+        return $tips;
     }
 
     public function can_read(): bool {
@@ -771,6 +801,125 @@ class Abilities {
         }
 
         return $response;
+    }
+
+    public function save_session_note( $input ) {
+        $input = $this->normalize_input( $input );
+        $note = isset( $input['note'] ) ? sanitize_textarea_field( (string) $input['note'] ) : '';
+        if ( '' === trim( $note ) ) {
+            return new WP_Error(
+                'wordcamp_companion_missing_note',
+                __( 'Provide note text to save.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        $plan = $this->repository->get_plan( get_current_user_id() );
+        $event_url = $this->get_event_url_from_input_or_plan( $input, $plan );
+        if ( is_wp_error( $event_url ) ) {
+            return $event_url;
+        }
+
+        $event_plan = $this->get_event_plan( $plan, $event_url );
+        $saved_sessions = $this->get_saved_sessions_for_plan( $event_plan );
+        $target = $this->get_note_target_session( $input, $saved_sessions );
+        if ( is_wp_error( $target ) ) {
+            return $target;
+        }
+
+        $post_id = absint( $target['post_id'] ?? 0 );
+        if ( ! $post_id || get_current_user_id() !== absint( get_post_field( 'post_author', $post_id ) ) ) {
+            return new WP_Error(
+                'wordcamp_companion_note_session_not_found',
+                __( 'Saved session was not found for the current user.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
+        $mode = isset( $input['mode'] ) ? sanitize_key( (string) $input['mode'] ) : 'append';
+        $existing_note = sanitize_textarea_field( (string) get_post_meta( $post_id, 'wcc_session_notes', true ) );
+        $updated_note = 'replace' === $mode || '' === trim( $existing_note )
+            ? $note
+            : rtrim( $existing_note ) . "\n\n" . $note;
+
+        update_post_meta( $post_id, 'wcc_session_notes', $updated_note );
+
+        $target['notes'] = $updated_note;
+        $target['updated_at'] = time();
+
+        return [
+            'event_url' => $event_url,
+            'mode'      => 'replace' === $mode ? 'replace' : 'append',
+            'session'   => $target,
+        ];
+    }
+
+    private function get_note_target_session( array $input, array $saved_sessions ) {
+        $post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+        $session_id = isset( $input['session_id'] ) ? absint( $input['session_id'] ) : 0;
+
+        if ( $post_id ) {
+            foreach ( $saved_sessions as $saved_session ) {
+                if ( $post_id === absint( $saved_session['post_id'] ?? 0 ) ) {
+                    return $saved_session;
+                }
+            }
+
+            return new WP_Error(
+                'wordcamp_companion_note_post_not_saved',
+                __( 'The post_id is not a saved session in this WordCamp plan.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
+        if ( $session_id ) {
+            foreach ( $saved_sessions as $saved_session ) {
+                if ( $session_id === absint( $saved_session['session_id'] ?? 0 ) ) {
+                    return $saved_session;
+                }
+            }
+
+            return new WP_Error(
+                'wordcamp_companion_note_session_not_saved',
+                __( 'The session_id is not saved in this WordCamp plan.', 'wordcamp-companion' ),
+                [ 'status' => 404 ]
+            );
+        }
+
+        return $this->get_current_saved_session( $saved_sessions );
+    }
+
+    private function get_current_saved_session( array $saved_sessions ) {
+        $now = time();
+        $active_sessions = array_values(
+            array_filter(
+                $saved_sessions,
+                function ( array $session ) use ( $now ): bool {
+                    $start = absint( $session['start'] ?? 0 );
+                    $end = absint( $session['end'] ?? 0 );
+
+                    return $start && $end && $start <= $now && $now <= $end;
+                }
+            )
+        );
+
+        if ( 1 === count( $active_sessions ) ) {
+            return $active_sessions[0];
+        }
+
+        if ( empty( $active_sessions ) ) {
+            return new WP_Error(
+                'wordcamp_companion_no_current_session',
+                __( 'No saved session is currently in progress. Provide a session_id or post_id.', 'wordcamp-companion' ),
+                [ 'status' => 400 ]
+            );
+        }
+
+        return new WP_Error(
+            'wordcamp_companion_multiple_current_sessions',
+            __( 'Multiple saved sessions are currently in progress. Provide a session_id or post_id.', 'wordcamp-companion' ),
+            [ 'status' => 400 ]
+        );
     }
 
     private function get_event_url_from_input_or_plan( array $input, ?array $plan = null ) {
@@ -1703,6 +1852,46 @@ class Abilities {
                 ],
             ],
             'required'             => [ 'session_ids' ],
+            'additionalProperties' => false,
+        ];
+    }
+
+    private function schema_save_session_note_input(): array {
+        return [
+            'type'                 => 'object',
+            'properties'           => [
+                'event_url' => [
+                    'type'        => 'string',
+                    'description' => 'WordCamp site URL. If omitted, the selected WordCamp is used.',
+                ],
+                'wordcamp_term_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Local WordCamp plan term ID from get-plan. Use this to save a note for a specific planned WordCamp.',
+                ],
+                'event_id' => [
+                    'type'        => 'integer',
+                    'description' => 'WordCamp Central event ID from wordcamp-companion/list-wordcamps. Use event_url when available.',
+                ],
+                'post_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Saved session post_id from get-plan. Preferred when available.',
+                ],
+                'session_id' => [
+                    'type'        => 'integer',
+                    'description' => 'Numeric WordCamp session ID from the schedule or saved plan. If omitted with post_id, the currently running saved session is used when exactly one is active.',
+                ],
+                'note' => [
+                    'type'        => 'string',
+                    'description' => 'Note text to save. Markdown is allowed.',
+                ],
+                'mode' => [
+                    'type'        => 'string',
+                    'description' => 'Use append to add to existing notes, or replace to overwrite existing notes.',
+                    'enum'        => [ 'append', 'replace' ],
+                    'default'     => 'append',
+                ],
+            ],
+            'required'             => [ 'note' ],
             'additionalProperties' => false,
         ];
     }
