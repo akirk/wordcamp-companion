@@ -29,6 +29,18 @@
     function queueSessionNotesAutosave() {
         return WCC.queueSessionNotesAutosave.apply(WCC, arguments);
     }
+    function getNoteSectionId() {
+        return WCC.getNoteSectionId.apply(WCC, arguments);
+    }
+    function getNoteSectionUrl() {
+        return WCC.getNoteSectionUrl.apply(WCC, arguments);
+    }
+    function updateNoteAutosaveStatusElement() {
+        return WCC.updateNoteAutosaveStatusElement.apply(WCC, arguments);
+    }
+    function updateNotePageLinkElement() {
+        return WCC.updateNotePageLinkElement.apply(WCC, arguments);
+    }
     function getErrorAlert() {
         return WCC.getErrorAlert.apply(WCC, arguments);
     }
@@ -1752,6 +1764,39 @@
         return '#';
     }
 
+    function getExportMarkdownUrl(url) {
+        const value = String(url || '').trim();
+
+        if (!/^(https?:|mailto:)/i.test(value)) {
+            return '';
+        }
+
+        return value.replace(/\)/g, '%29');
+    }
+
+    function escapeMarkdownLinkText(text) {
+        return String(text || '').replace(/([\\\]])/g, '\\$1');
+    }
+
+    function formatExportMarkdownLink(text, url) {
+        const safeUrl = getExportMarkdownUrl(url);
+
+        if (!safeUrl) {
+            return text;
+        }
+
+        return '[' + escapeMarkdownLinkText(text) + '](' + safeUrl + ')';
+    }
+
+    function formatExportSessionSpeakers(session) {
+        const names = Array.isArray(session && session.speaker_names) ? session.speaker_names : [];
+        const urls = Array.isArray(session && session.speaker_urls) ? session.speaker_urls : [];
+
+        return names.map(function (name, index) {
+            return formatExportMarkdownLink(name, urls[index] || '');
+        }).join(', ');
+    }
+
     function renderNotesPage() {
         const events = getNoteEvents();
         if (!events.length) {
@@ -1880,18 +1925,16 @@
         groupSessionsByDay(notedSessions, timeZone).forEach(function (group) {
             lines.push('## ' + group.label, '');
             group.sessions.forEach(function (session) {
+                const title = session.title || 'Untitled session';
                 const meta = [
                     formatSessionTime(session, timeZone),
                     getPrimaryTrack(session),
-                    session.speaker_names && session.speaker_names.length ? session.speaker_names.join(', ') : '',
+                    formatExportSessionSpeakers(session),
                 ].filter(Boolean);
 
-                lines.push('### ' + (session.title || 'Untitled session'));
+                lines.push('### ' + formatExportMarkdownLink(title, session.url || ''));
                 if (meta.length) {
                     lines.push(meta.join(' / '));
-                }
-                if (session.url) {
-                    lines.push(session.url);
                 }
                 lines.push('', getSessionNotes(session).trim(), '');
             });
@@ -2956,6 +2999,7 @@
         const persistedValue = typeof notePost.notes === 'string' ? notePost.notes : '';
         const details = element('details', {
             className: 'wcc-session-notes' + (options.compact ? ' is-compact' : ''),
+            id: getNoteSectionId(postId),
         });
         const textarea = element('textarea', {
             className: 'wcc-note-editor',
@@ -2967,9 +3011,20 @@
         const status = element('span', {
             className: 'wcc-note-autosave-status',
             'data-note-post-id': String(postId),
-            text: getNoteAutosaveStatusText(postId, value, persistedValue),
         });
-        const toolbar = renderNoteMarkdownToolbar(textarea, postId, persistedValue, status);
+        const statusText = getNoteAutosaveStatusText(postId, value, persistedValue);
+        const notesLink = state.page === 'notes' ? null : element('a', {
+            className: 'wcc-note-page-link',
+            'data-note-page-link-post-id': String(postId),
+            href: getNoteSectionUrl(postId),
+            text: 'View all notes',
+        });
+        const toolbar = renderNoteMarkdownToolbar(textarea, postId, persistedValue, status, notesLink);
+
+        updateNoteAutosaveStatusElement(status, postId, statusText);
+        if (notesLink) {
+            updateNotePageLinkElement(notesLink, statusText);
+        }
 
         if (value || Object.prototype.hasOwnProperty.call(state.noteDrafts, postId)) {
             details.open = true;
@@ -2978,13 +3033,16 @@
         textarea.value = value;
         autoResizeNoteTextarea(textarea);
         textarea.addEventListener('input', function () {
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink);
         });
         textarea.addEventListener('keydown', function (event) {
-            handleNoteEditorKeydown(event, textarea, postId, persistedValue, status);
+            handleNoteEditorKeydown(event, textarea, postId, persistedValue, status, notesLink);
         });
 
         actions.append(status);
+        if (notesLink) {
+            actions.append(notesLink);
+        }
         details.append(
             element('summary', { text: persistedValue || value ? 'Notes' : 'Add notes' }),
             toolbar,
@@ -2995,7 +3053,7 @@
         return details;
     }
 
-    function renderNoteMarkdownToolbar(textarea, postId, persistedValue, status) {
+    function renderNoteMarkdownToolbar(textarea, postId, persistedValue, status, notesLink) {
         const toolbar = element('div', {
             className: 'wcc-note-toolbar',
             'aria-label': 'Markdown formatting controls',
@@ -3019,7 +3077,7 @@
                 event.preventDefault();
             });
             button.addEventListener('click', function () {
-                applyNoteMarkdownControl(textarea, control, postId, persistedValue, status);
+                applyNoteMarkdownControl(textarea, control, postId, persistedValue, status, notesLink);
             });
             toolbar.append(button);
         });
@@ -3027,7 +3085,7 @@
         return toolbar;
     }
 
-    function applyNoteMarkdownControl(textarea, control, postId, persistedValue, status) {
+    function applyNoteMarkdownControl(textarea, control, postId, persistedValue, status, notesLink) {
         textarea.focus();
         let changed = true;
 
@@ -3040,37 +3098,41 @@
         }
 
         if (changed) {
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink);
         }
     }
 
-    function handleNoteEditorInput(textarea, postId, persistedValue, status) {
+    function handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink) {
         autoResizeNoteTextarea(textarea);
         state.noteDrafts[postId] = textarea.value;
         state.noteAutosaveStatus[postId] = 'unsaved';
-        status.textContent = getNoteAutosaveStatusText(postId, textarea.value, persistedValue);
+        const statusText = getNoteAutosaveStatusText(postId, textarea.value, persistedValue);
+        updateNoteAutosaveStatusElement(status, postId, statusText);
+        if (notesLink) {
+            updateNotePageLinkElement(notesLink, statusText);
+        }
         refreshNotesExportPreview();
         queueSessionNotesAutosave(postId, textarea.value);
     }
 
-    function handleNoteEditorKeydown(event, textarea, postId, persistedValue, status) {
+    function handleNoteEditorKeydown(event, textarea, postId, persistedValue, status, notesLink) {
         if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'b') {
             event.preventDefault();
             wrapNoteSelection(textarea, '**', '**', 'bold text');
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink);
             return;
         }
 
         if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'i') {
             event.preventDefault();
             wrapNoteSelection(textarea, '_', '_', 'italic text');
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink);
             return;
         }
 
         if (event.key === 'Enter' && continueNoteList(textarea)) {
             event.preventDefault();
-            handleNoteEditorInput(textarea, postId, persistedValue, status);
+            handleNoteEditorInput(textarea, postId, persistedValue, status, notesLink);
         }
     }
 
@@ -3216,7 +3278,7 @@
             return 'Unsaved changes';
         }
 
-        return 'Autosaved';
+        return '';
     }
 
     function renderNoteSession(session) {
