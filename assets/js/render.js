@@ -104,6 +104,9 @@
     function formatSlotTime() {
         return WCC.formatSlotTime.apply(WCC, arguments);
     }
+    function getDateKey() {
+        return WCC.getDateKey.apply(WCC, arguments);
+    }
     function getEventTitle() {
         return WCC.getEventTitle.apply(WCC, arguments);
     }
@@ -3305,8 +3308,12 @@
         const sessionEnd = Number(session && (session.end || session.start) || 0);
         const gapStart = Number(gap && gap.start || 0);
         const gapEnd = Number(gap && gap.end || 0);
+        const gapDayKey = gap && (gap.dayKey || gap.day_key) ? gap.dayKey || gap.day_key : (gapStart ? getDateKey(gapStart, timeZone) : '');
+        const currentDayKey = getDateKey(getNow(), timeZone);
+        const sessionDayKey = sessionStart ? getDateKey(sessionStart, timeZone) : '';
+        const isCurrentGapDay = currentDayKey === gapDayKey && sessionDayKey === gapDayKey;
 
-        if (sessionStart && gapStart && sessionStart < gapStart) {
+        if (sessionStart && gapStart && sessionStart < gapStart && isCurrentGapDay) {
             notices.push('Started at ' + formatSlotTime(sessionStart, timeZone));
         }
 
