@@ -145,9 +145,12 @@
         }
 
         const selectedPlan = ensureSelectedPlan();
-        const event = selectedPlan.event && typeof selectedPlan.event === 'object'
+        const catalogEvent = getEventByUrl(state.selectedEventUrl) || {};
+        const planEvent = selectedPlan.event && typeof selectedPlan.event === 'object'
             ? selectedPlan.event
-            : { event_url: state.selectedEventUrl };
+            : {};
+        const scheduleEvent = data.event && typeof data.event === 'object' ? data.event : {};
+        const event = mergeEventSnapshots(mergeEventSnapshots(catalogEvent, planEvent), scheduleEvent);
 
         event.event_url = state.selectedEventUrl;
 
@@ -172,6 +175,40 @@
                 site_name: event.site_name || state.schedule.event.site_name,
             });
         }
+    }
+
+    function mergeEventSnapshots(base, update) {
+        const merged = Object.assign({}, base || {});
+
+        Object.keys(update || {}).forEach(function (key) {
+            const value = update[key];
+
+            if (key === 'venue' && value && typeof value === 'object' && !Array.isArray(value)) {
+                merged.venue = mergeEventSnapshots(
+                    merged.venue && typeof merged.venue === 'object' ? merged.venue : {},
+                    value
+                );
+                return;
+            }
+
+            if (hasEventValue(value)) {
+                merged[key] = value;
+            }
+        });
+
+        return merged;
+    }
+
+    function hasEventValue(value) {
+        if (Array.isArray(value)) {
+            return value.length > 0;
+        }
+
+        if (value && typeof value === 'object') {
+            return Object.keys(value).length > 0;
+        }
+
+        return value !== '' && value !== null && value !== undefined;
     }
 
     function mergeLoadedGapCandidates(requestedGapKey, gaps) {
