@@ -24,6 +24,7 @@
         exitingCompanionStepKeys: {},
         savingEvent: false,
         savingSessionId: null,
+        pendingDeletedSessionUndo: null,
         savingCompanionEventUrl: '',
         savingNotePostId: null,
         noteAutosaveTimers: {},

@@ -304,7 +304,23 @@
             const actions = element('span', { className: 'wcc-alert-actions' });
 
             state.alert.actions.forEach(function (action) {
-                if (!action || !action.href || !action.label) {
+                if (!action || !action.label || (!action.href && typeof action.callback !== 'function')) {
+                    return;
+                }
+
+                if (typeof action.callback === 'function') {
+                    const button = element('button', {
+                        className: 'wcc-button',
+                        type: 'button',
+                        text: action.label,
+                    });
+
+                    button.disabled = Boolean(action.disabled);
+                    button.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        action.callback();
+                    });
+                    actions.append(button);
                     return;
                 }
 
@@ -1942,7 +1958,7 @@
         if (!visibleSteps.length) {
             nodes.schedule.append(element('div', {
                 className: 'wcc-empty',
-                text: timeline.steps.length ? 'WordCamp complete.' : 'No companion steps.',
+                text: timeline.steps.length ? 'Hope you had a great WordCamp!' : 'No companion steps.',
             }));
             return;
         }
