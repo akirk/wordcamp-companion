@@ -1368,6 +1368,10 @@ body.has-wcc-modal {
     line-height: 1.25;
 }
 
+.wcc-companion-body {
+    min-width: 0;
+}
+
 .wcc-companion-body h3 a {
     color: inherit;
     text-decoration-thickness: 1px;
@@ -1610,6 +1614,8 @@ body.has-wcc-modal {
 
 .wcc-gap-picker {
     margin-top: 0;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .wcc-gap-toggle {
@@ -1641,7 +1647,9 @@ body.has-wcc-modal {
 .wcc-gap-grid {
     display: grid;
     gap: 6px;
-    min-width: 520px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     margin-top: 8px;
     overflow-x: auto;
 }
