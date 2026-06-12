@@ -2055,6 +2055,11 @@ body.has-wcc-modal {
     margin-top: 8px;
 }
 
+.wcc-empty-stack {
+    display: grid;
+    gap: 12px;
+}
+
 .wcc-empty-actions {
     display: flex;
     justify-content: center;
