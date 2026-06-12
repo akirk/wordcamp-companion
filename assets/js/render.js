@@ -2404,12 +2404,30 @@
 
             if (completedSteps.length) {
                 renderCompanionSteps(completedSteps, now, null, { dateSeparators: true, hideLabel: true });
+            } else {
+                renderEmptyCompanionTimeline();
             }
 
             return;
         }
 
         renderCompanionSteps(renderableSteps, now, model);
+    }
+
+    function renderEmptyCompanionTimeline() {
+        const wrapper = element('div', { className: 'wcc-companion' });
+        const event = getSelectedEvent();
+
+        wrapper.append(
+            renderCompanionTopLink(),
+            renderCompanionFallback(
+                event ? 'No sessions yet' : 'No WordCamp selected',
+                event
+                    ? 'This WordCamp does not have any published sessions yet. You can switch WordCamps or attend another one.'
+                    : 'Choose the WordCamp you are planning to attend to start your companion timeline.'
+            )
+        );
+        nodes.schedule.append(wrapper);
     }
 
     function renderCompanionSteps(steps, now, model, options) {
@@ -2499,7 +2517,7 @@
                     element('a', {
                         className: 'wcc-button',
                         href: getPlanYourDayUrl(null),
-                        text: 'Attend a WordCamp',
+                        text: 'Upcoming WordCamps',
                     }),
                 ],
             })
