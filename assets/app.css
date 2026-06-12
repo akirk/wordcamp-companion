@@ -2067,7 +2067,7 @@ body.has-wcc-modal {
 }
 
 .wcc-empty-event-date {
-    color: var(--wcc-primary);
+    color: var(--wcc-text);
     font-size: 1.45rem;
     font-weight: 750;
     line-height: 1.15;
