@@ -2395,33 +2395,76 @@
 
     function renderCompanion(model) {
         model = model || getCompanionRenderModel();
-        const timeline = model.timeline;
         const now = model.now;
         const visibleSteps = model.visibleSteps;
         const renderableSteps = model.renderableSteps;
 
         if (!visibleSteps.length) {
-            nodes.schedule.append(element('div', {
-                className: 'wcc-empty',
-                text: timeline.steps.length ? 'Hope you had a great WordCamp!' : 'No companion steps.',
-            }));
+            const completedSteps = getCompletedCompanionSteps(model.timeline.steps);
+
+            if (completedSteps.length) {
+                renderCompanionSteps(completedSteps, now, null, { dateSeparators: true, hideLabel: true });
+            }
+
             return;
         }
 
+        renderCompanionSteps(renderableSteps, now, model);
+    }
+
+    function renderCompanionSteps(steps, now, model, options) {
+        options = options || {};
         const wrapper = element('div', {
             className: 'wcc-companion',
             dataset: {
-                companionSignature: getCompanionRenderSignature(model),
-                companionStepKeys: getCompanionStepKeySignature(renderableSteps),
+                companionSignature: model ? getCompanionRenderSignature(model) : '',
+                companionStepKeys: getCompanionStepKeySignature(steps),
             },
         });
         wrapper.append(renderCompanionTopLink());
 
-        renderableSteps.forEach(function (step, index) {
-            wrapper.append(renderCompanionStep(step, now, index));
+        let currentDayKey = '';
+        steps.forEach(function (step, index) {
+            if (options.dateSeparators) {
+                const dayKey = getCompanionStepDayKey(step);
+
+                if (dayKey && dayKey !== currentDayKey) {
+                    currentDayKey = dayKey;
+                    wrapper.append(renderCompanionDateSeparator(step));
+                }
+            }
+
+            wrapper.append(renderCompanionStep(step, now, index, options));
         });
 
         nodes.schedule.append(wrapper);
+    }
+
+    function getCompletedCompanionSteps(steps) {
+        return steps.filter(function (step) {
+            return step.type === 'session' || step.type === 'break';
+        });
+    }
+
+    function getCompanionStepDayKey(step) {
+        const timeZone = getSelectedTimezone();
+
+        return step.start ? getDateKey(step.start, timeZone) : 'unscheduled';
+    }
+
+    function renderCompanionDateSeparator(step) {
+        const timeZone = getSelectedTimezone();
+        const label = step.start ? formatDate(step.start, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+        }, timeZone) : 'Unscheduled';
+
+        return element('div', {
+            className: 'wcc-companion-date-separator',
+            text: label,
+        });
     }
 
     function getCompanionRenderModel() {
@@ -2908,7 +2951,8 @@
         return wrapper;
     }
 
-    function renderCompanionStep(step, now, index) {
+    function renderCompanionStep(step, now, index, options) {
+        options = options || {};
         const isCurrent = isCompanionStepCurrent(step, now);
         const isGap = step.type === 'gap';
         const item = element('article', {
@@ -2919,7 +2963,7 @@
         });
         const timeZone = getSelectedTimezone();
         const timeLabel = formatCompanionStepTime(step, timeZone);
-        const label = getCompanionStepLabel(step, now, index, timeLabel);
+        const label = options.hideLabel ? '' : getCompanionStepLabel(step, now, index, timeLabel);
         const body = element('div', { className: 'wcc-companion-body' });
         let gapPicker = null;
 
@@ -2947,7 +2991,11 @@
                 heading.append(renderCompanionRemoveButton(step.session));
             }
 
-            body.append(element('div', { className: 'wcc-companion-label', text: label }), heading);
+            if (label) {
+                body.append(element('div', { className: 'wcc-companion-label', text: label }));
+            }
+
+            body.append(heading);
         }
 
         if (step.detail) {

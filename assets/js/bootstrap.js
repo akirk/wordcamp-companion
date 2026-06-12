@@ -83,6 +83,10 @@
 
     function init() {
         nodes.app = document.getElementById('wordcamp-companion-app');
+        if (!nodes.app) {
+            return;
+        }
+
         state.page = nodes.app && nodes.app.dataset.page ? nodes.app.dataset.page : 'companion';
         state.view = state.page === 'plan' ? 'schedule' : (state.page === 'notes' ? 'notes' : 'companion');
         state.pickerOpen = state.page === 'plan' || state.page === 'plan-selector';

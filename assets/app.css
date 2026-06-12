@@ -1253,6 +1253,13 @@ body.has-wcc-modal {
     border-radius: 8px;
 }
 
+.wcc-companion-date-separator {
+    margin: 8px 0 2px;
+    color: var(--wcc-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
 .wcc-companion-step {
     position: relative;
     display: grid;
