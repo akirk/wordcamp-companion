@@ -2536,44 +2536,59 @@
     }
 
     function renderEmptyCompanionEventDetails(event) {
-        const details = [
-            ['WordCamp', getEventTitle(event)],
-            ['When', formatEventRange(event)],
-            ['Where', getEventAddress(event)],
-            ['Timezone', event.schedule_timezone || event.timezone || ''],
-        ].filter(function (item) {
-            return item[1];
-        });
+        const title = getEventTitle(event);
+        const range = formatEventRange(event);
+        const address = getEventAddress(event);
+        const timezone = event.schedule_timezone || event.timezone || '';
+        const summaryParts = [];
+        const metaParts = [];
 
-        if (!details.length && !event.event_url) {
+        if (title) {
+            summaryParts.push(title);
+        }
+        if (range) {
+            summaryParts.push(range);
+        }
+        if (address) {
+            summaryParts.push(address);
+        }
+        if (timezone) {
+            metaParts.push('Timezone: ' + timezone);
+        }
+
+        if (!summaryParts.length && !metaParts.length && !event.event_url) {
             return null;
         }
 
-        const list = element('dl', { className: 'wcc-empty-event-details' });
-        details.forEach(function (item) {
-            list.append(
-                element('dt', { text: item[0] }),
-                element('dd', { text: item[1] })
-            );
-        });
+        const details = element('div', { className: 'wcc-empty-event-details' });
 
-        if (event.event_url) {
-            list.append(
-                element('dt', { text: 'Website' }),
-                element('dd', {
-                    children: [
-                        element('a', {
-                            href: event.event_url,
-                            target: '_blank',
-                            rel: 'noopener noreferrer',
-                            text: event.event_url,
-                        }),
-                    ],
-                })
-            );
+        if (summaryParts.length) {
+            details.append(element('p', { text: summaryParts.join(' - ') }));
         }
 
-        return list;
+        if (metaParts.length || event.event_url) {
+            const meta = element('p', { className: 'wcc-empty-event-meta' });
+
+            if (metaParts.length) {
+                meta.append(metaParts.join(' - '));
+            }
+
+            if (event.event_url) {
+                if (meta.childNodes.length) {
+                    meta.append(' - ');
+                }
+                meta.append(element('a', {
+                    href: event.event_url,
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                    text: 'Visit the WordCamp site',
+                }));
+            }
+
+            details.append(meta);
+        }
+
+        return details;
     }
 
     function renderCompanionRenderError(error) {
