@@ -2060,58 +2060,6 @@ body.has-wcc-modal {
     gap: 12px;
 }
 
-.wcc-empty-event-details {
-    width: min(100%, 520px);
-    margin: 0 auto;
-    padding: 24px;
-    text-align: center;
-    background: var(--wcc-surface);
-    border: 1px solid var(--wcc-border);
-    border-radius: 8px;
-    overflow-wrap: anywhere;
-    white-space: pre-line;
-}
-
-.wcc-empty-event-details h1,
-.wcc-empty-event-details h2,
-.wcc-empty-event-details p {
-    margin: 0;
-}
-
-.wcc-empty-event-details .wcc-empty-event-relative {
-    margin-bottom: 3px;
-    color: var(--wcc-muted);
-    font-size: 0.88rem;
-    font-weight: 650;
-}
-
-.wcc-empty-event-date {
-    color: var(--wcc-text);
-    font-size: 1.45rem;
-    font-weight: 750;
-    line-height: 1.15;
-}
-
-.wcc-empty-event-details .wcc-empty-event-title {
-    margin-top: 8px;
-    color: var(--wcc-text);
-    font-size: 1rem;
-    font-weight: 700;
-    line-height: 1.25;
-}
-
-.wcc-empty-event-details .wcc-empty-event-location {
-    margin-top: 6px;
-    color: var(--wcc-muted);
-    font-size: 0.94rem;
-}
-
-.wcc-empty-event-details .wcc-empty-event-meta {
-    margin-top: 10px;
-    color: var(--wcc-muted);
-    font-size: 0.9rem;
-}
-
 .wcc-empty-actions {
     display: flex;
     justify-content: center;

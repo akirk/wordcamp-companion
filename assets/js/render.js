@@ -74,9 +74,6 @@
     function formatDebugTimeAdjustment() {
         return WCC.formatDebugTimeAdjustment.apply(WCC, arguments);
     }
-    function formatDurationWords() {
-        return WCC.formatDurationWords.apply(WCC, arguments);
-    }
     function isCompanionStepPast() {
         return WCC.isCompanionStepPast.apply(WCC, arguments);
     }
@@ -115,6 +112,9 @@
     }
     function getEventAddress() {
         return WCC.getEventAddress.apply(WCC, arguments);
+    }
+    function getEventMapLinks() {
+        return WCC.getEventMapLinks.apply(WCC, arguments);
     }
     function getRenderableEvents() {
         return WCC.getRenderableEvents.apply(WCC, arguments);
@@ -2550,93 +2550,38 @@
     }
 
     function renderEmptyCompanionEventDetails(event) {
-        const title = getEventTitle(event);
-        const relativeStart = formatEmptyCompanionRelativeStart(event);
-        const range = formatEmptyCompanionEventRange(event);
-        const address = getEventAddress(event);
-
-        if (!title && !relativeStart && !range && !address && !event.event_url) {
+        if (!event) {
             return null;
         }
 
-        const details = element('section', {
-            className: 'wcc-empty-event-details',
-            'aria-label': 'Selected WordCamp',
-        });
+        const start = Number(event.start || 0);
+        const step = {
+            type: 'arrival',
+            dayKey: start ? getDateKey(start, getSelectedTimezone()) : '',
+            start: start,
+            end: start ? start + 30 * 60 : 0,
+            dayStart: start,
+            title: 'Arrive at ' + getEventTitle(event),
+            detail: getEventAddress(event),
+            mapLinks: getEventMapLinks(event),
+            meta: formatEmptyCompanionEventDay(event),
+        };
 
-        if (relativeStart) {
-            details.append(element('p', { className: 'wcc-empty-event-relative', text: relativeStart }));
-        }
-
-        if (range) {
-            details.append(element('h1', { className: 'wcc-empty-event-date', text: range }));
-        }
-
-        if (title) {
-            details.append(element('h2', { className: 'wcc-empty-event-title', text: title }));
-        }
-
-        if (address) {
-            details.append(element('p', { className: 'wcc-empty-event-location', text: address }));
-        }
-
-        if (event.event_url) {
-            const meta = element('p', { className: 'wcc-empty-event-meta' });
-
-            meta.append(element('a', {
-                href: event.event_url,
-                target: '_blank',
-                rel: 'noopener noreferrer',
-                text: 'Visit the WordCamp site',
-            }));
-            details.append(meta);
-        }
-
-        return details;
+        return renderCompanionStep(step, getNow(), 0);
     }
 
-    function formatEmptyCompanionRelativeStart(event) {
-        const start = Number(event && event.start || 0);
-        const now = getNow();
-
-        if (!start || start <= now) {
-            return '';
-        }
-
-        return 'in ' + formatDurationWords(start - now);
-    }
-
-    function formatEmptyCompanionEventRange(event) {
+    function formatEmptyCompanionEventDay(event) {
         if (!event || !event.start) {
             return '';
         }
 
         const timeZone = getValidTimeZone(event.timezone || '');
-        const start = Number(event.start || 0);
-        const end = Number(event.end || start);
-
-        if (!end || end === start) {
-            return formatDate(start, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
-        }
-
-        const sameYear = formatDate(start, { year: 'numeric' }, timeZone) === formatDate(end, { year: 'numeric' }, timeZone);
-        const sameMonth = sameYear &&
-            formatDate(start, { month: 'numeric' }, timeZone) === formatDate(end, { month: 'numeric' }, timeZone);
-
-        if (sameMonth) {
-            return formatDate(start, { month: 'long' }, timeZone) + ' ' +
-                formatDate(start, { day: 'numeric' }, timeZone) + ' - ' +
-                formatDate(end, { day: 'numeric' }, timeZone) + ', ' +
-                formatDate(end, { year: 'numeric' }, timeZone);
-        }
-
-        if (sameYear) {
-            return formatDate(start, { month: 'long', day: 'numeric' }, timeZone) + ' - ' +
-                formatDate(end, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
-        }
-
-        return formatDate(start, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone) + ' - ' +
-            formatDate(end, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
+        return formatDate(event.start, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+        }, timeZone);
     }
 
     function renderCompanionRenderError(error) {
