@@ -32,7 +32,7 @@ class App extends BaseApp {
         add_action( 'init', [ PlannerRepository::class, 'register_content_types' ] );
         add_action( 'rest_api_init', [ $this->rest_controller, 'register_routes' ] );
         add_action( 'wp_app_before_render', [ $this, 'redirect_empty_companion_to_wordcamp_selector' ], 10, 2 );
-        $this->enqueue_assets();
+        add_action( 'wp_app_before_render', [ $this, 'enqueue_assets' ], 10, 2 );
     }
 
     protected function get_url_path(): string {
@@ -88,6 +88,10 @@ class App extends BaseApp {
     }
 
     public function redirect_empty_companion_to_wordcamp_selector( string $template_path, array $route_data ): void {
+        if ( ! $this->is_companion_template( $template_path ) ) {
+            return;
+        }
+
         if ( 'index.php' !== basename( $template_path ) || ( $route_data['pattern'] ?? null ) !== '' ) {
             return;
         }
@@ -119,7 +123,11 @@ class App extends BaseApp {
         return '';
     }
 
-    private function enqueue_assets(): void {
+    public function enqueue_assets( string $template_path, array $route_data ): void {
+        if ( ! $this->is_companion_template( $template_path ) ) {
+            return;
+        }
+
         $plugin_file = dirname( __DIR__ ) . '/wordcamp-companion.php';
         $css_path = dirname( __DIR__ ) . '/assets/app.css';
         $version = defined( 'WORDCAMP_COMPANION_VERSION' ) ? WORDCAMP_COMPANION_VERSION : '1.0.0';
@@ -181,6 +189,13 @@ class App extends BaseApp {
 
             $previous_script_handle = $handle;
         }
+    }
+
+    private function is_companion_template( string $template_path ): bool {
+        $template_dir = wp_normalize_path( realpath( $this->get_template_dir() ) ?: $this->get_template_dir() );
+        $template_path = wp_normalize_path( realpath( $template_path ) ?: $template_path );
+
+        return 0 === strpos( $template_path, trailingslashit( $template_dir ) );
     }
 
     private function get_client_config( string $asset_version ): array {
