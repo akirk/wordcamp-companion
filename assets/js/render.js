@@ -74,6 +74,9 @@
     function formatDebugTimeAdjustment() {
         return WCC.formatDebugTimeAdjustment.apply(WCC, arguments);
     }
+    function formatDurationWords() {
+        return WCC.formatDurationWords.apply(WCC, arguments);
+    }
     function isCompanionStepPast() {
         return WCC.isCompanionStepPast.apply(WCC, arguments);
     }
@@ -2546,21 +2549,26 @@
 
     function renderEmptyCompanionEventDetails(event) {
         const title = getEventTitle(event);
+        const relativeStart = formatEmptyCompanionRelativeStart(event);
         const range = formatEmptyCompanionEventRange(event);
         const address = getEventAddress(event);
 
-        if (!title && !range && !address && !event.event_url) {
+        if (!title && !relativeStart && !range && !address && !event.event_url) {
             return null;
         }
 
         const details = element('div', { className: 'wcc-empty-event-details' });
 
+        if (relativeStart) {
+            details.append(element('p', { className: 'wcc-empty-event-relative', text: relativeStart }));
+        }
+
         if (range) {
-            details.append(element('p', { className: 'wcc-empty-event-date', text: range }));
+            details.append(element('h1', { className: 'wcc-empty-event-date', text: range }));
         }
 
         if (title) {
-            details.append(element('p', { className: 'wcc-empty-event-title', text: title }));
+            details.append(element('h2', { className: 'wcc-empty-event-title', text: title }));
         }
 
         if (address) {
@@ -2580,6 +2588,17 @@
         }
 
         return details;
+    }
+
+    function formatEmptyCompanionRelativeStart(event) {
+        const start = Number(event && event.start || 0);
+        const now = getNow();
+
+        if (!start || start <= now) {
+            return '';
+        }
+
+        return 'in ' + formatDurationWords(start - now);
     }
 
     function formatEmptyCompanionEventRange(event) {

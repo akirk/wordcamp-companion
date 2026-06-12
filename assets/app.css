@@ -2062,8 +2062,17 @@ body.has-wcc-modal {
     white-space: pre-line;
 }
 
+.wcc-empty-event-details h1,
+.wcc-empty-event-details h2,
 .wcc-empty-event-details p {
     margin: 0;
+}
+
+.wcc-empty-event-details .wcc-empty-event-relative {
+    margin-bottom: 3px;
+    color: var(--wcc-muted);
+    font-size: 0.88rem;
+    font-weight: 650;
 }
 
 .wcc-empty-event-date {
@@ -2078,6 +2087,7 @@ body.has-wcc-modal {
     color: var(--wcc-text);
     font-size: 1rem;
     font-weight: 700;
+    line-height: 1.25;
 }
 
 .wcc-empty-event-details .wcc-empty-event-location {
