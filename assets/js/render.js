@@ -110,6 +110,9 @@
     function getEventTitle() {
         return WCC.getEventTitle.apply(WCC, arguments);
     }
+    function getEventAddress() {
+        return WCC.getEventAddress.apply(WCC, arguments);
+    }
     function getRenderableEvents() {
         return WCC.getRenderableEvents.apply(WCC, arguments);
     }
@@ -2424,7 +2427,8 @@
                 event ? 'No sessions yet' : 'No WordCamp selected',
                 event
                     ? 'This WordCamp does not have any published sessions yet. You can switch WordCamps or attend another one.'
-                    : 'Choose the WordCamp you are planning to attend to start your companion timeline.'
+                    : 'Choose the WordCamp you are planning to attend to start your companion timeline.',
+                event ? renderEmptyCompanionEventDetails(event) : null
             )
         );
         nodes.schedule.append(wrapper);
@@ -2506,24 +2510,70 @@
         );
     }
 
-    function renderCompanionFallback(title, detail) {
+    function renderCompanionFallback(title, detail, details) {
         const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
         empty.append(
             element('h1', { text: title }),
-            element('p', { text: detail }),
-            element('p', {
-                className: 'wcc-empty-actions',
-                children: [
-                    element('a', {
-                        className: 'wcc-button',
-                        href: getPlanYourDayUrl(null),
-                        text: 'Upcoming WordCamps',
-                    }),
-                ],
-            })
+            element('p', { text: detail })
         );
 
+        if (details) {
+            empty.append(details);
+        }
+
+        empty.append(element('p', {
+            className: 'wcc-empty-actions',
+            children: [
+                element('a', {
+                    className: 'wcc-button',
+                    href: getPlanYourDayUrl(null),
+                    text: 'Upcoming WordCamps',
+                }),
+            ],
+        }));
+
         return empty;
+    }
+
+    function renderEmptyCompanionEventDetails(event) {
+        const details = [
+            ['WordCamp', getEventTitle(event)],
+            ['When', formatEventRange(event)],
+            ['Where', getEventAddress(event)],
+            ['Timezone', event.schedule_timezone || event.timezone || ''],
+        ].filter(function (item) {
+            return item[1];
+        });
+
+        if (!details.length && !event.event_url) {
+            return null;
+        }
+
+        const list = element('dl', { className: 'wcc-empty-event-details' });
+        details.forEach(function (item) {
+            list.append(
+                element('dt', { text: item[0] }),
+                element('dd', { text: item[1] })
+            );
+        });
+
+        if (event.event_url) {
+            list.append(
+                element('dt', { text: 'Website' }),
+                element('dd', {
+                    children: [
+                        element('a', {
+                            href: event.event_url,
+                            target: '_blank',
+                            rel: 'noopener noreferrer',
+                            text: event.event_url,
+                        }),
+                    ],
+                })
+            );
+        }
+
+        return list;
     }
 
     function renderCompanionRenderError(error) {

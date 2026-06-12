@@ -2055,6 +2055,29 @@ body.has-wcc-modal {
     margin-top: 8px;
 }
 
+.wcc-empty-event-details {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 12px;
+    width: min(100%, 520px);
+    margin: 18px auto 0;
+    text-align: left;
+}
+
+.wcc-empty-event-details dt {
+    color: var(--wcc-muted);
+    font-size: 0.82rem;
+    font-weight: 650;
+}
+
+.wcc-empty-event-details dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--wcc-text);
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
 .wcc-empty-actions {
     display: flex;
     justify-content: center;
