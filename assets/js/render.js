@@ -74,6 +74,12 @@
     function formatDebugTimeAdjustment() {
         return WCC.formatDebugTimeAdjustment.apply(WCC, arguments);
     }
+    function formatDurationWords() {
+        return WCC.formatDurationWords.apply(WCC, arguments);
+    }
+    function getCalendarDayDistance() {
+        return WCC.getCalendarDayDistance.apply(WCC, arguments);
+    }
     function isCompanionStepPast() {
         return WCC.isCompanionStepPast.apply(WCC, arguments);
     }
@@ -2434,8 +2440,9 @@
                 event
                     ? 'The schedule has not been published yet. You can switch WordCamps or attend another one.'
                     : 'Choose the WordCamp you are planning to attend to start your companion timeline.',
-                event ? renderEmptyCompanionEventDetails(event) : null,
-                Boolean(event)
+                event ? renderEmptyCompanionEventStart(event) : null,
+                Boolean(event),
+                event ? renderEmptyCompanionEventEnd(event) : null
             )
         );
         nodes.schedule.append(wrapper);
@@ -2517,7 +2524,7 @@
         );
     }
 
-    function renderCompanionFallback(title, detail, details, detailsFirst) {
+    function renderCompanionFallback(title, detail, details, detailsFirst, trailingDetails) {
         const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
 
         empty.append(
@@ -2543,13 +2550,20 @@
         if (details && detailsFirst) {
             const wrapper = element('div', { className: 'wcc-empty-stack' });
             wrapper.append(details, empty);
+            if (trailingDetails) {
+                wrapper.append(trailingDetails);
+            }
             return wrapper;
+        }
+
+        if (trailingDetails) {
+            empty.append(trailingDetails);
         }
 
         return empty;
     }
 
-    function renderEmptyCompanionEventDetails(event) {
+    function renderEmptyCompanionEventStart(event) {
         if (!event) {
             return null;
         }
@@ -2561,6 +2575,7 @@
             start: start,
             end: start ? start + 30 * 60 : 0,
             dayStart: start,
+            label: formatEmptyCompanionRelativeDate(start, getEmptyCompanionEventTimezone(event)),
             title: 'Arrive at ' + getEventTitle(event),
             detail: getEventAddress(event),
             mapLinks: getEventMapLinks(event),
@@ -2570,18 +2585,92 @@
         return renderCompanionStep(step, getNow(), 0);
     }
 
+    function renderEmptyCompanionEventEnd(event) {
+        const start = Number(event && event.start || 0);
+        const end = Number(event && (event.end || event.start) || 0);
+
+        if (!event || !end || end === start) {
+            return null;
+        }
+
+        const step = {
+            type: 'day-end',
+            dayKey: getDateKey(end, getSelectedTimezone()),
+            start: end,
+            end: end,
+            dayStart: start || end,
+            label: formatEmptyCompanionRelativeDate(end, getEmptyCompanionEventTimezone(event)),
+            title: 'End of WordCamp',
+            detail: formatEmptyCompanionDuration(event),
+            meta: formatEmptyCompanionEventDay({ start: end, timezone: getEmptyCompanionEventTimezone(event) }),
+            final: true,
+        };
+
+        return renderCompanionStep(step, getNow(), 1);
+    }
+
+    function formatEmptyCompanionRelativeDate(timestamp, timeZone) {
+        const start = Number(timestamp || 0);
+        const now = getNow();
+
+        if (!start) {
+            return '';
+        }
+
+        const zone = getValidTimeZone(timeZone || '');
+        const dayDistance = getCalendarDayDistance(start, now, zone);
+
+        if (dayDistance === 0) {
+            return 'Today';
+        }
+
+        if (dayDistance === 1) {
+            return 'Tomorrow';
+        }
+
+        if (start > now) {
+            return dayDistance > 1 ? 'In ' + dayDistance + ' days' : 'In ' + formatDurationWords(start - now);
+        }
+
+        return formatEmptyCompanionEventDay({ start: start, timezone: zone });
+    }
+
+    function formatEmptyCompanionDuration(event) {
+        const start = Number(event && event.start || 0);
+        const end = Number(event && (event.end || event.start) || 0);
+
+        if (!start || !end || end <= start) {
+            return '';
+        }
+
+        const timeZone = getValidTimeZone(getEmptyCompanionEventTimezone(event));
+        const startDay = getDateKey(start, timeZone);
+        const endDay = getDateKey(end, timeZone);
+        const days = Math.max(1, getCalendarDayDistance(end, start, timeZone) + 1);
+
+        if (startDay === endDay) {
+            return 'One-day event';
+        }
+
+        return days + '-day event';
+    }
+
     function formatEmptyCompanionEventDay(event) {
         if (!event || !event.start) {
             return '';
         }
 
-        const timeZone = getValidTimeZone(event.timezone || '');
+        const timeZone = getValidTimeZone(getEmptyCompanionEventTimezone(event));
         return formatDate(event.start, {
             weekday: 'long',
             month: 'long',
             day: 'numeric',
             year: 'numeric',
         }, timeZone);
+    }
+
+    function getEmptyCompanionEventTimezone(event) {
+        return event && (event.schedule_timezone || event.timezone) ? (event.schedule_timezone || event.timezone) : '';
     }
 
     function renderCompanionRenderError(error) {
@@ -3039,7 +3128,7 @@
         });
         const timeZone = getSelectedTimezone();
         const timeLabel = formatCompanionStepTime(step, timeZone);
-        const label = options.hideLabel ? '' : getCompanionStepLabel(step, now, index, timeLabel);
+        const label = options.hideLabel ? '' : (step.label || getCompanionStepLabel(step, now, index, timeLabel));
         const body = element('div', { className: 'wcc-companion-body' });
         let gapPicker = null;
 
