@@ -2426,9 +2426,10 @@
             renderCompanionFallback(
                 event ? 'No sessions yet' : 'No WordCamp selected',
                 event
-                    ? 'This WordCamp does not have any published sessions yet. You can switch WordCamps or attend another one.'
+                    ? getEventTitle(event) + ' does not have any published sessions yet. You can switch WordCamps or attend another one.'
                     : 'Choose the WordCamp you are planning to attend to start your companion timeline.',
-                event ? renderEmptyCompanionEventDetails(event) : null
+                event ? renderEmptyCompanionEventDetails(event) : null,
+                Boolean(event)
             )
         );
         nodes.schedule.append(wrapper);
@@ -2510,14 +2511,19 @@
         );
     }
 
-    function renderCompanionFallback(title, detail, details) {
+    function renderCompanionFallback(title, detail, details, detailsFirst) {
         const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
+
+        if (details && detailsFirst) {
+            empty.append(details);
+        }
+
         empty.append(
             element('h1', { text: title }),
             element('p', { text: detail })
         );
 
-        if (details) {
+        if (details && !detailsFirst) {
             empty.append(details);
         }
 
