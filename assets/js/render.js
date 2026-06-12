@@ -194,6 +194,9 @@
     function formatDate() {
         return WCC.formatDate.apply(WCC, arguments);
     }
+    function getValidTimeZone() {
+        return WCC.getValidTimeZone.apply(WCC, arguments);
+    }
     function isDebugClockEnabled() {
         return WCC.isDebugClockEnabled.apply(WCC, arguments);
     }
@@ -2426,7 +2429,7 @@
             renderCompanionFallback(
                 event ? 'No sessions yet' : 'No WordCamp selected',
                 event
-                    ? getEventTitle(event) + ' does not have any published sessions yet. You can switch WordCamps or attend another one.'
+                    ? 'The schedule has not been published yet. You can switch WordCamps or attend another one.'
                     : 'Choose the WordCamp you are planning to attend to start your companion timeline.',
                 event ? renderEmptyCompanionEventDetails(event) : null,
                 Boolean(event)
@@ -2543,58 +2546,73 @@
 
     function renderEmptyCompanionEventDetails(event) {
         const title = getEventTitle(event);
-        const range = formatEventRange(event);
+        const range = formatEmptyCompanionEventRange(event);
         const address = getEventAddress(event);
-        const timezone = event.schedule_timezone || event.timezone || '';
-        const summaryParts = [];
-        const metaParts = [];
 
-        if (title) {
-            summaryParts.push(title);
-        }
-        if (range) {
-            summaryParts.push(range);
-        }
-        if (address) {
-            summaryParts.push(address);
-        }
-        if (timezone) {
-            metaParts.push('Timezone: ' + timezone);
-        }
-
-        if (!summaryParts.length && !metaParts.length && !event.event_url) {
+        if (!title && !range && !address && !event.event_url) {
             return null;
         }
 
         const details = element('div', { className: 'wcc-empty-event-details' });
 
-        if (summaryParts.length) {
-            details.append(element('p', { text: summaryParts.join(' - ') }));
+        if (range) {
+            details.append(element('p', { className: 'wcc-empty-event-date', text: range }));
         }
 
-        if (metaParts.length || event.event_url) {
+        if (title) {
+            details.append(element('p', { className: 'wcc-empty-event-title', text: title }));
+        }
+
+        if (address) {
+            details.append(element('p', { className: 'wcc-empty-event-location', text: address }));
+        }
+
+        if (event.event_url) {
             const meta = element('p', { className: 'wcc-empty-event-meta' });
 
-            if (metaParts.length) {
-                meta.append(metaParts.join(' - '));
-            }
-
-            if (event.event_url) {
-                if (meta.childNodes.length) {
-                    meta.append(' - ');
-                }
-                meta.append(element('a', {
-                    href: event.event_url,
-                    target: '_blank',
-                    rel: 'noopener noreferrer',
-                    text: 'Visit the WordCamp site',
-                }));
-            }
-
+            meta.append(element('a', {
+                href: event.event_url,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                text: 'Visit the WordCamp site',
+            }));
             details.append(meta);
         }
 
         return details;
+    }
+
+    function formatEmptyCompanionEventRange(event) {
+        if (!event || !event.start) {
+            return '';
+        }
+
+        const timeZone = getValidTimeZone(event.timezone || '');
+        const start = Number(event.start || 0);
+        const end = Number(event.end || start);
+
+        if (!end || end === start) {
+            return formatDate(start, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
+        }
+
+        const sameYear = formatDate(start, { year: 'numeric' }, timeZone) === formatDate(end, { year: 'numeric' }, timeZone);
+        const sameMonth = sameYear &&
+            formatDate(start, { month: 'numeric' }, timeZone) === formatDate(end, { month: 'numeric' }, timeZone);
+
+        if (sameMonth) {
+            return formatDate(start, { month: 'long' }, timeZone) + ' ' +
+                formatDate(start, { day: 'numeric' }, timeZone) + ' - ' +
+                formatDate(end, { day: 'numeric' }, timeZone) + ', ' +
+                formatDate(end, { year: 'numeric' }, timeZone);
+        }
+
+        if (sameYear) {
+            return formatDate(start, { month: 'long', day: 'numeric' }, timeZone) + ' - ' +
+                formatDate(end, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
+        }
+
+        return formatDate(start, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone) + ' - ' +
+            formatDate(end, { month: 'long', day: 'numeric', year: 'numeric' }, timeZone);
     }
 
     function renderCompanionRenderError(error) {
