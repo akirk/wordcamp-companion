@@ -2055,9 +2055,19 @@ body.has-wcc-modal {
     margin-top: 8px;
 }
 
+.wcc-empty-stack {
+    display: grid;
+    gap: 12px;
+}
+
 .wcc-empty-event-details {
     width: min(100%, 520px);
-    margin: 0 auto 22px;
+    margin: 0 auto;
+    padding: 24px;
+    text-align: center;
+    background: var(--wcc-surface);
+    border: 1px solid var(--wcc-border);
+    border-radius: 8px;
     overflow-wrap: anywhere;
     white-space: pre-line;
 }

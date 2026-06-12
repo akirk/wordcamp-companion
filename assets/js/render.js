@@ -2520,10 +2520,6 @@
     function renderCompanionFallback(title, detail, details, detailsFirst) {
         const empty = element('div', { className: 'wcc-empty wcc-empty-companion' });
 
-        if (details && detailsFirst) {
-            empty.append(details);
-        }
-
         empty.append(
             element('h1', { text: title }),
             element('p', { text: detail })
@@ -2544,6 +2540,12 @@
             ],
         }));
 
+        if (details && detailsFirst) {
+            const wrapper = element('div', { className: 'wcc-empty-stack' });
+            wrapper.append(details, empty);
+            return wrapper;
+        }
+
         return empty;
     }
 
@@ -2557,7 +2559,10 @@
             return null;
         }
 
-        const details = element('div', { className: 'wcc-empty-event-details' });
+        const details = element('section', {
+            className: 'wcc-empty-event-details',
+            'aria-label': 'Selected WordCamp',
+        });
 
         if (relativeStart) {
             details.append(element('p', { className: 'wcc-empty-event-relative', text: relativeStart }));
