@@ -1291,13 +1291,10 @@ body.has-wcc-modal {
     right: auto;
     bottom: 0;
     left: 0;
-    width: 100%;
+    width: calc(100% * var(--wcc-step-progress-scale, 0));
     height: 3px;
     background: var(--wcc-primary);
-    transform: scaleX(var(--wcc-step-progress-scale, 0));
-    transform-origin: left center;
-    transition: transform 180ms linear;
-    will-change: transform;
+    transition: width 180ms linear;
 }
 
 .wcc-companion-step.is-next {
@@ -1307,19 +1304,22 @@ body.has-wcc-modal {
 .wcc-companion-step.is-exiting {
     pointer-events: none;
     overflow: hidden;
-    will-change: transform, opacity;
-    animation: wcc-companion-step-exit 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: wcc-companion-step-exit 520ms ease forwards;
 }
 
 @keyframes wcc-companion-step-exit {
     from {
         opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
+        max-height: 460px;
     }
 
     to {
         opacity: 0;
-        transform: translate3d(0, -10px, 0) scale(0.985);
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        margin-top: 0;
+        margin-bottom: 0;
     }
 }
 
