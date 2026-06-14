@@ -2876,74 +2876,11 @@
     }
 
     function captureCompanionStepRects() {
-        const wrapper = getCurrentCompanionWrapper();
-        const rects = {};
-
-        if (!wrapper || shouldReduceMotion()) {
-            return null;
-        }
-
-        getCompanionStepNodes(wrapper).forEach(function (item) {
-            const key = item.dataset.companionStepKey || '';
-
-            if (key) {
-                rects[key] = item.getBoundingClientRect();
-            }
-        });
-
-        return Object.keys(rects).length ? rects : null;
+        return null;
     }
 
     function animateCompanionStepPositions(previousRects) {
-        const wrapper = getCurrentCompanionWrapper();
-
-        if (!previousRects || !wrapper || shouldReduceMotion() || typeof window.requestAnimationFrame !== 'function') {
-            return;
-        }
-
-        window.requestAnimationFrame(function () {
-            getCompanionStepNodes(wrapper).forEach(function (item) {
-                if (item.classList.contains('is-exiting')) {
-                    return;
-                }
-
-                const key = item.dataset.companionStepKey || '';
-                const previousRect = previousRects[key];
-
-                if (!previousRect) {
-                    return;
-                }
-
-                const currentRect = item.getBoundingClientRect();
-                const deltaX = previousRect.left - currentRect.left;
-                const deltaY = previousRect.top - currentRect.top;
-
-                if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
-                    return;
-                }
-
-                const animationId = String(Date.now()) + Math.random();
-                item.dataset.companionMoveAnimation = animationId;
-                item.style.transition = 'none';
-                item.style.transform = 'translate3d(' + deltaX + 'px, ' + deltaY + 'px, 0)';
-                item.style.willChange = 'transform';
-
-                window.requestAnimationFrame(function () {
-                    item.style.transition = 'transform 280ms cubic-bezier(0.2, 0, 0, 1)';
-                    item.style.transform = '';
-
-                    window.setTimeout(function () {
-                        if (item.dataset.companionMoveAnimation !== animationId) {
-                            return;
-                        }
-
-                        delete item.dataset.companionMoveAnimation;
-                        item.style.transition = '';
-                        item.style.willChange = '';
-                    }, 340);
-                });
-            });
-        });
+        return;
     }
 
     function getCurrentCompanionWrapper() {

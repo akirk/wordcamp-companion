@@ -159,6 +159,20 @@ class App extends BaseApp {
             0
         );
 
+        if ( 'settings.php' === basename( $template_path ) ) {
+            $settings_script_path = dirname( __DIR__ ) . '/assets/js/settings.js';
+            if ( file_exists( $settings_script_path ) ) {
+                wp_app_enqueue_script(
+                    'wordcamp-companion-settings',
+                    plugins_url( 'assets/js/settings.js', $plugin_file ),
+                    [],
+                    $asset_version . '-' . filemtime( $settings_script_path )
+                );
+            }
+
+            return;
+        }
+
         $script_assets = [
             'wordcamp-companion-state'           => 'assets/js/state.js',
             'wordcamp-companion-i18n'            => 'assets/js/i18n.js',
