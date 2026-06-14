@@ -162,47 +162,81 @@ class App extends BaseApp {
         if ( 'settings.php' === basename( $template_path ) ) {
             $settings_script_path = dirname( __DIR__ ) . '/assets/js/settings.js';
             if ( file_exists( $settings_script_path ) ) {
-                wp_app_enqueue_script(
-                    'wordcamp-companion-settings',
-                    plugins_url( 'assets/js/settings.js', $plugin_file ),
-                    [],
-                    $asset_version . '-' . filemtime( $settings_script_path )
-                );
+                $this->enqueue_script_asset( 'wordcamp-companion-settings', 'assets/js/settings.js', [], $asset_version );
             }
 
             return;
         }
 
-        $script_assets = [
-            'wordcamp-companion-state'           => 'assets/js/state.js',
-            'wordcamp-companion-i18n'            => 'assets/js/i18n.js',
-            'wordcamp-companion-dom'             => 'assets/js/dom.js',
-            'wordcamp-companion-api'             => 'assets/js/api.js',
-            'wordcamp-companion-qr'              => 'assets/js/qr.js',
-            'wordcamp-companion-events'          => 'assets/js/events.js',
-            'wordcamp-companion-schedule-model'  => 'assets/js/schedule-model.js',
-            'wordcamp-companion-companion-model' => 'assets/js/companion-model.js',
-            'wordcamp-companion-render'          => 'assets/js/render.js',
-            'wordcamp-companion-debug-clock'     => 'assets/js/debug-clock.js',
-            'wordcamp-companion'                 => 'assets/js/bootstrap.js',
-        ];
+        $script_assets = $this->get_script_assets_for_template( $template_path );
         $previous_script_handle = null;
 
         foreach ( $script_assets as $handle => $relative_path ) {
-            $script_path = dirname( __DIR__ ) . '/' . $relative_path;
-            if ( ! file_exists( $script_path ) ) {
-                continue;
+            if ( $this->enqueue_script_asset( $handle, $relative_path, $previous_script_handle ? [ $previous_script_handle ] : [], $asset_version ) ) {
+                $previous_script_handle = $handle;
             }
-
-            wp_app_enqueue_script(
-                $handle,
-                plugins_url( $relative_path, $plugin_file ),
-                $previous_script_handle ? [ $previous_script_handle ] : [],
-                $asset_version . '-' . filemtime( $script_path )
-            );
-
-            $previous_script_handle = $handle;
         }
+    }
+
+    private function get_script_assets_for_template( string $template_path ): array {
+        $page = basename( $template_path );
+        $assets = [
+            'wordcamp-companion-state'          => 'assets/js/state.js',
+            'wordcamp-companion-i18n'           => 'assets/js/i18n.js',
+            'wordcamp-companion-dom'            => 'assets/js/dom.js',
+            'wordcamp-companion-api'            => 'assets/js/api.js',
+            'wordcamp-companion-asset-loader'   => 'assets/js/asset-loader.js',
+            'wordcamp-companion-clock'          => 'assets/js/clock.js',
+            'wordcamp-companion-events'         => 'assets/js/events.js',
+            'wordcamp-companion-schedule-model' => 'assets/js/schedule-model.js',
+        ];
+
+        if ( 'index.php' === $page ) {
+            $assets['wordcamp-companion-companion-model'] = 'assets/js/companion-model.js';
+        }
+
+        $assets['wordcamp-companion-render'] = 'assets/js/render.js';
+
+        if ( 'plan-your.php' === $page ) {
+            $assets['wordcamp-companion-render-events'] = 'assets/js/render-events.js';
+        }
+
+        if ( in_array( $page, [ 'index.php', 'plan.php' ], true ) ) {
+            $assets['wordcamp-companion-render-share'] = 'assets/js/render-share.js';
+        }
+
+        if ( 'plan.php' === $page ) {
+            $assets['wordcamp-companion-render-plan'] = 'assets/js/render-plan.js';
+        }
+
+        if ( 'notes.php' === $page ) {
+            $assets['wordcamp-companion-render-notes'] = 'assets/js/render-notes.js';
+        }
+
+        if ( 'index.php' === $page && UserSettings::is_debug_clock_enabled( get_current_user_id() ) ) {
+            $assets['wordcamp-companion-debug-clock'] = 'assets/js/debug-clock.js';
+        }
+
+        $assets['wordcamp-companion'] = 'assets/js/bootstrap.js';
+
+        return $assets;
+    }
+
+    private function enqueue_script_asset( string $handle, string $relative_path, array $dependencies, string $asset_version ): bool {
+        $plugin_file = dirname( __DIR__ ) . '/wordcamp-companion.php';
+        $script_path = dirname( __DIR__ ) . '/' . $relative_path;
+        if ( ! file_exists( $script_path ) ) {
+            return false;
+        }
+
+        wp_app_enqueue_script(
+            $handle,
+            plugins_url( $relative_path, $plugin_file ),
+            $dependencies,
+            $asset_version . '-' . filemtime( $script_path )
+        );
+
+        return true;
     }
 
     private function is_companion_template( string $template_path ): bool {
@@ -231,6 +265,23 @@ class App extends BaseApp {
             'initialPlan'              => $this->repository->get_plan( get_current_user_id() ),
             'savedSessionRestBase'     => PlannerRepository::POST_REST_BASE,
             'wordcampTaxonomyRestBase' => PlannerRepository::TAXONOMY_REST_BASE,
+            'lazyAssets'               => [
+                'qr' => $this->get_lazy_asset_url( 'assets/js/qr.js', $asset_version ),
+            ],
         ];
+    }
+
+    private function get_lazy_asset_url( string $relative_path, string $asset_version ): string {
+        $plugin_file = dirname( __DIR__ ) . '/wordcamp-companion.php';
+        $path = dirname( __DIR__ ) . '/' . $relative_path;
+        if ( ! file_exists( $path ) ) {
+            return '';
+        }
+
+        return add_query_arg(
+            'ver',
+            $asset_version . '-' . filemtime( $path ),
+            plugins_url( $relative_path, $plugin_file )
+        );
     }
 }
